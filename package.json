@@ -1,0 +1,25 @@
+{
+  "name": "bitesize-recipe-finder",
+  "version": "1.0.0",
+  "description": "BiteSize: Smart Ingredient Recipe Finder & Meal Planner web application built with Express and Google Stitch UI.",
+  "main": "server.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "keywords": [
+    "recipe-finder",
+    "spoonacular",
+    "express",
+    "food-waste",
+    "meal-planner"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2"
+  }
+}
