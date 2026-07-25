@@ -360,10 +360,14 @@ app.get('/api/ingredients/autocomplete', async (req, res) => {
   return res.json(filtered);
 });
 
-// Start Server
-app.listen(PORT, () => {
-  console.log(`=======================================================`);
-  console.log(`  BiteSize Web App is running live on http://localhost:${PORT}`);
-  console.log(`  API Proxy Status: ${SPOONACULAR_API_KEY ? 'Connected (Spoonacular Key Active)' : 'Demo Mode (Mock Data Active)'}`);
-  console.log(`=======================================================`);
-});
+// Start Server locally or export for Serverless (Vercel)
+if (require.main === module) {
+  app.listen(PORT, () => {
+    console.log(`=======================================================`);
+    console.log(`  BiteSize Web App is running live on http://localhost:${PORT}`);
+    console.log(`  API Proxy Status: ${SPOONACULAR_API_KEY ? 'Connected (Spoonacular Key Active)' : 'Demo Mode (Mock Data Active)'}`);
+    console.log(`=======================================================`);
+  });
+}
+
+module.exports = app;
