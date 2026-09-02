@@ -38,7 +38,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const clearAllChipsBtn = document.getElementById('clear-all-chips-btn');
   const presetTagsContainer = document.getElementById('preset-tags-container');
   const findRecipesBtn = document.getElementById('find-recipes-btn');
-  
+
   // Navigation & Header
   const navDiscoverBtn = document.getElementById('nav-discover-btn');
   const navSavedBtn = document.getElementById('nav-saved-btn');
@@ -116,7 +116,7 @@ document.addEventListener('DOMContentLoaded', () => {
     updateSavedCountBadge();
     renderChips();
     syncPresetTags();
-    
+
     // Auto-fetch default initial demo recipe set for rich initial experience
     fetchRecipes();
 
@@ -669,17 +669,15 @@ document.addEventListener('DOMContentLoaded', () => {
         const isOwned = state.activeIngredients.some(ing => nameClean.includes(ing) || ing.includes(nameClean));
 
         const itemEl = document.createElement('div');
-        itemEl.className = `p-2.5 rounded-xl border flex items-center justify-between text-xs font-medium ${
-          isOwned 
-            ? 'bg-emerald-50/80 border-emerald-200 text-emerald-950' 
+        itemEl.className = `p-2.5 rounded-xl border flex items-center justify-between text-xs font-medium ${isOwned
+            ? 'bg-emerald-50/80 border-emerald-200 text-emerald-950'
             : 'bg-orange-50/80 border-orange-200 text-orange-950'
-        }`;
+          }`;
 
         itemEl.innerHTML = `
           <div class="flex items-center gap-2">
-            <span class="w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${
-              isOwned ? 'bg-emerald-600 text-white' : 'bg-orange-500 text-white'
-            }">
+            <span class="w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${isOwned ? 'bg-emerald-600 text-white' : 'bg-orange-500 text-white'
+          }">
               ${isOwned ? '✓' : '!'}
             </span>
             <span>${item.original || item.name}</span>
@@ -738,7 +736,7 @@ document.addEventListener('DOMContentLoaded', () => {
       ...(recipe.usedIngredients || []),
       ...(recipe.missedIngredients || [])
     ];
-    const text = `🛒 BiteSize Shopping List for ${recipe.title}:\n\n` + 
+    const text = `🛒 BiteSize Shopping List for ${recipe.title}:\n\n` +
       allIngredients.map(i => `- ${i.original || i.name}`).join('\n');
 
     navigator.clipboard.writeText(text).then(() => {
@@ -779,11 +777,11 @@ document.addEventListener('DOMContentLoaded', () => {
     stateEmpty.classList.add('hidden');
     stateNoMatch.classList.add('hidden');
     recipeGrid.classList.add('hidden');
-    
+
     stateLoading.classList.remove('hidden');
     stateLoading.innerHTML = '';
     const template = document.getElementById('skeleton-card-template');
-    
+
     for (let i = 0; i < 6; i++) {
       if (template) {
         stateLoading.appendChild(template.content.cloneNode(true));
@@ -848,11 +846,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const instructions = recipe.instructions && recipe.instructions.length > 0
       ? recipe.instructions
       : [
-          'Prepare all ingredients by washing, peeling, and chopping as needed.',
-          'Heat skillet or cooking pot over medium heat with oil or butter.',
-          'Add primary ingredients and cook according to recipe instructions until tender.',
-          'Season generously and serve hot.'
-        ];
+        'Prepare all ingredients by washing, peeling, and chopping as needed.',
+        'Heat skillet or cooking pot over medium heat with oil or butter.',
+        'Add primary ingredients and cook according to recipe instructions until tender.',
+        'Season generously and serve hot.'
+      ];
 
     state.cookMode.active = true;
     state.cookMode.steps = instructions;
@@ -1035,7 +1033,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const AudioCtx = window.AudioContext || window.webkitAudioContext;
       if (!AudioCtx) return;
       const ctx = new AudioCtx();
-      
+
       const now = ctx.currentTime;
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
