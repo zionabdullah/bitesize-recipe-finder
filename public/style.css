@@ -380,20 +380,18 @@ body {
 /* Speaking Pulse Indicator */
 .speaking-active {
   animation: voicePulse 1.2s infinite ease-in-out;
-  background-color: #059669 !important;
+  background-color: #15803D !important;
 }
 
 @keyframes voicePulse {
   0% {
-    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
+    box-shadow: 0 0 0 0 rgba(22, 163, 74, 0.6);
   }
-
   70% {
-    box-shadow: 0 0 0 14px rgba(16, 185, 129, 0);
+    box-shadow: 0 0 0 14px rgba(22, 163, 74, 0);
   }
-
   100% {
-    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0);
+    box-shadow: 0 0 0 0 rgba(22, 163, 74, 0);
   }
 }
 
@@ -404,12 +402,11 @@ body {
 
 @keyframes alarmRedFlash {
   0% {
-    background-color: rgba(220, 38, 38, 0.2);
-    border-color: #ef4444;
+    background-color: #FEF2F2;
+    color: #DC2626;
   }
-
   100% {
-    background-color: rgba(220, 38, 38, 0.5);
-    border-color: #f87171;
+    background-color: #FEE2E2;
+    color: #B91C1C;
   }
 }
