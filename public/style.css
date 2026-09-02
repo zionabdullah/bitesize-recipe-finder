@@ -360,3 +360,48 @@ body {
     transform: translateY(0);
   }
 }
+
+/* Hands-Free Cook Mode Custom Styles */
+.stitch-cook-mode-container {
+  transform: translateY(30px) scale(0.96);
+  transition: transform var(--transition-bounce), opacity var(--transition-normal);
+}
+
+.stitch-dialog-backdrop.open .stitch-cook-mode-container {
+  transform: translateY(0) scale(1);
+}
+
+/* Speaking Pulse Indicator */
+.speaking-active {
+  animation: voicePulse 1.2s infinite ease-in-out;
+  background-color: #059669 !important;
+}
+
+@keyframes voicePulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
+  }
+  70% {
+    box-shadow: 0 0 0 14px rgba(16, 185, 129, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0);
+  }
+}
+
+/* Cook Mode Timer Alarm Flash */
+.timer-alarm-flash {
+  animation: alarmRedFlash 1s infinite alternate;
+}
+
+@keyframes alarmRedFlash {
+  0% {
+    background-color: rgba(220, 38, 38, 0.2);
+    border-color: #ef4444;
+  }
+  100% {
+    background-color: rgba(220, 38, 38, 0.5);
+    border-color: #f87171;
+  }
+}
+
