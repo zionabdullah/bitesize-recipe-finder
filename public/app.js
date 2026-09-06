@@ -13,7 +13,18 @@ document.addEventListener('DOMContentLoaded', () => {
     currentRecipes: [],
     activeTab: 'discover', // 'discover' | 'saved'
     activeRecipeDetail: null,
-    user: JSON.parse(localStorage.getItem('bitesize_user') || '{"name":"Guest User","email":""}')
+    user: JSON.parse(localStorage.getItem('bitesize_user') || '{"name":"Guest User","email":""}'),
+    cookMode: {
+      active: false,
+      currentStep: 0,
+      totalSteps: 0,
+      steps: [],
+      timerSeconds: 300,
+      timerInitial: 300,
+      timerInterval: null,
+      isRunning: false,
+      synth: window.speechSynthesis || null
+    }
   };
 
   // -------------------------------------------------------------------
@@ -27,7 +38,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const clearAllChipsBtn = document.getElementById('clear-all-chips-btn');
   const presetTagsContainer = document.getElementById('preset-tags-container');
   const findRecipesBtn = document.getElementById('find-recipes-btn');
-  
+
   // Navigation & Header
   const navDiscoverBtn = document.getElementById('nav-discover-btn');
   const navSavedBtn = document.getElementById('nav-saved-btn');
@@ -76,6 +87,28 @@ document.addEventListener('DOMContentLoaded', () => {
   const filterGf = document.getElementById('filter-gf');
   const filterKeto = document.getElementById('filter-keto');
 
+  // Cook Mode Elements
+  const startCookModeBtn = document.getElementById('start-cook-mode-btn');
+  const cookModeBackdrop = document.getElementById('cook-mode-backdrop');
+  const closeCookModeBtn = document.getElementById('close-cook-mode-btn');
+  const cookRecipeTitle = document.getElementById('cook-mode-recipe-title');
+  const cookProgressBar = document.getElementById('cook-mode-progress-bar');
+  const cookStepBadge = document.getElementById('cook-mode-step-badge');
+  const cookStepText = document.getElementById('cook-mode-step-text');
+  const cookSpeakBtn = document.getElementById('cook-speak-btn');
+  const cookSpeakBtnText = document.getElementById('cook-speak-btn-text');
+  const cookPauseBtn = document.getElementById('cook-pause-btn');
+  const cookVoiceSpeed = document.getElementById('cook-voice-speed');
+  const cookVoiceSelect = document.getElementById('cook-voice-select');
+  const cookAutoRead = document.getElementById('cook-auto-read');
+  const cookTimerDetected = document.getElementById('cook-timer-detected');
+  const cookTimerDisplay = document.getElementById('cook-timer-display');
+  const cookTimerStart = document.getElementById('cook-timer-start');
+  const cookTimerPause = document.getElementById('cook-timer-pause');
+  const cookTimerReset = document.getElementById('cook-timer-reset');
+  const cookPrevBtn = document.getElementById('cook-prev-btn');
+  const cookNextBtn = document.getElementById('cook-next-btn');
+
   // -------------------------------------------------------------------
   // 3. INITIALIZATION & EVEN LISTENERS
   // -------------------------------------------------------------------
@@ -84,7 +117,8 @@ document.addEventListener('DOMContentLoaded', () => {
     updateSavedCountBadge();
     renderChips();
     syncPresetTags();
-    
+    initVoiceSynthesis();
+
     // Auto-fetch default initial demo recipe set for rich initial experience
     fetchRecipes();
 
@@ -94,6 +128,46 @@ document.addEventListener('DOMContentLoaded', () => {
       if (e.key === 'Enter') {
         e.preventDefault();
         handleAddIngredientFromInput();
+      }
+    });
+
+    // Cook Mode Listeners
+    if (startCookModeBtn) startCookModeBtn.addEventListener('click', openCookMode);
+    if (closeCookModeBtn) closeCookModeBtn.addEventListener('click', closeCookMode);
+    if (cookSpeakBtn) cookSpeakBtn.addEventListener('click', speakCurrentStep);
+    if (cookPauseBtn) cookPauseBtn.addEventListener('click', stopSpeaking);
+    if (cookTimerStart) cookTimerStart.addEventListener('click', startCookTimer);
+    if (cookTimerPause) cookTimerPause.addEventListener('click', pauseCookTimer);
+    if (cookTimerReset) cookTimerReset.addEventListener('click', resetCookTimer);
+    if (cookPrevBtn) cookPrevBtn.addEventListener('click', prevCookStep);
+    if (cookNextBtn) cookNextBtn.addEventListener('click', nextCookStep);
+
+    document.querySelectorAll('.cook-timer-add-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const addedSecs = parseInt(e.target.dataset.seconds || 60, 10);
+        addCookTimerTime(addedSecs);
+      });
+    });
+
+    // Keyboard navigation for Cook Mode
+    document.addEventListener('keydown', (e) => {
+      if (!state.cookMode.active) return;
+      if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        nextCookStep();
+      } else if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        prevCookStep();
+      } else if (e.key === ' ') {
+        // Spacebar toggles voice speech or timer
+        if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA') {
+          e.preventDefault();
+          if (state.cookMode.synth && state.cookMode.synth.speaking) {
+            stopSpeaking();
+          } else {
+            speakCurrentStep();
+          }
+        }
       }
     });
 
@@ -597,17 +671,15 @@ document.addEventListener('DOMContentLoaded', () => {
         const isOwned = state.activeIngredients.some(ing => nameClean.includes(ing) || ing.includes(nameClean));
 
         const itemEl = document.createElement('div');
-        itemEl.className = `p-2.5 rounded-xl border flex items-center justify-between text-xs font-medium ${
-          isOwned 
-            ? 'bg-emerald-50/80 border-emerald-200 text-emerald-950' 
+        itemEl.className = `p-2.5 rounded-xl border flex items-center justify-between text-xs font-medium ${isOwned
+            ? 'bg-emerald-50/80 border-emerald-200 text-emerald-950'
             : 'bg-orange-50/80 border-orange-200 text-orange-950'
-        }`;
+          }`;
 
         itemEl.innerHTML = `
           <div class="flex items-center gap-2">
-            <span class="w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${
-              isOwned ? 'bg-emerald-600 text-white' : 'bg-orange-500 text-white'
-            }">
+            <span class="w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${isOwned ? 'bg-emerald-600 text-white' : 'bg-orange-500 text-white'
+          }">
               ${isOwned ? '✓' : '!'}
             </span>
             <span>${item.original || item.name}</span>
@@ -666,7 +738,7 @@ document.addEventListener('DOMContentLoaded', () => {
       ...(recipe.usedIngredients || []),
       ...(recipe.missedIngredients || [])
     ];
-    const text = `🛒 BiteSize Shopping List for ${recipe.title}:\n\n` + 
+    const text = `🛒 BiteSize Shopping List for ${recipe.title}:\n\n` +
       allIngredients.map(i => `- ${i.original || i.name}`).join('\n');
 
     navigator.clipboard.writeText(text).then(() => {
@@ -707,11 +779,11 @@ document.addEventListener('DOMContentLoaded', () => {
     stateEmpty.classList.add('hidden');
     stateNoMatch.classList.add('hidden');
     recipeGrid.classList.add('hidden');
-    
+
     stateLoading.classList.remove('hidden');
     stateLoading.innerHTML = '';
     const template = document.getElementById('skeleton-card-template');
-    
+
     for (let i = 0; i < 6; i++) {
       if (template) {
         stateLoading.appendChild(template.content.cloneNode(true));
@@ -764,6 +836,308 @@ document.addEventListener('DOMContentLoaded', () => {
       toast.style.transition = 'all 300ms ease';
       setTimeout(() => toast.remove(), 300);
     }, 3000);
+  }
+
+  // -------------------------------------------------------------------
+  // 12. HANDS-FREE COOK MODE & STEP TIMER LOGIC
+  // -------------------------------------------------------------------
+  function openCookMode() {
+    if (!state.activeRecipeDetail) return;
+    const recipe = state.activeRecipeDetail;
+
+    const instructions = recipe.instructions && recipe.instructions.length > 0
+      ? recipe.instructions
+      : [
+        'Prepare all ingredients by washing, peeling, and chopping as needed.',
+        'Heat skillet or cooking pot over medium heat with oil or butter.',
+        'Add primary ingredients and cook according to recipe instructions until tender.',
+        'Season generously and serve hot.'
+      ];
+
+    state.cookMode.active = true;
+    state.cookMode.steps = instructions;
+    state.cookMode.totalSteps = instructions.length;
+    state.cookMode.currentStep = 0;
+    state.cookMode.recipeTitle = recipe.title;
+
+    cookRecipeTitle.textContent = recipe.title;
+    cookModeBackdrop.classList.add('open');
+
+    renderCookStep();
+    showToast('Entered Cook Mode. Press Spacebar or 🔊 button to read steps!', 'success');
+  }
+
+  function closeCookMode() {
+    state.cookMode.active = false;
+    stopSpeaking();
+    pauseCookTimer();
+    cookModeBackdrop.classList.remove('open');
+  }
+
+  function renderCookStep() {
+    stopSpeaking();
+    pauseCookTimer();
+
+    const currentIdx = state.cookMode.currentStep;
+    const total = state.cookMode.totalSteps;
+    const stepText = state.cookMode.steps[currentIdx];
+
+    cookStepBadge.textContent = `Step ${currentIdx + 1} of ${total}`;
+    cookProgressBar.style.width = `${((currentIdx + 1) / total) * 100}%`;
+    cookStepText.textContent = stepText;
+
+    // Detect time from step text (e.g. "cook for 6-8 minutes" or "simmer 10 mins")
+    const timeMatch = stepText.match(/(?:(\d+)\s*(?:-|to)?\s*(\d+)?\s*(?:mins|minutes|min))/i);
+    let detectedMinutes = 5; // default fallback
+
+    if (timeMatch) {
+      if (timeMatch[2]) {
+        // Range like 6-8 -> pick average 7
+        detectedMinutes = Math.round((parseInt(timeMatch[1], 10) + parseInt(timeMatch[2], 10)) / 2);
+      } else {
+        detectedMinutes = parseInt(timeMatch[1], 10);
+      }
+      cookTimerDetected.textContent = `Detected: ${detectedMinutes} mins`;
+    } else {
+      cookTimerDetected.textContent = `Default: 5 mins`;
+    }
+
+    state.cookMode.timerSeconds = detectedMinutes * 60;
+    state.cookMode.timerInitial = detectedMinutes * 60;
+    updateTimerDisplay();
+
+    // Navigation buttons state
+    cookPrevBtn.disabled = currentIdx === 0;
+    cookPrevBtn.style.opacity = currentIdx === 0 ? '0.4' : '1';
+
+    if (currentIdx === total - 1) {
+      cookNextBtn.innerHTML = '<span>Finish Cooking 🎉</span>';
+      cookNextBtn.className = 'px-6 py-3 bg-amber-500 hover:bg-amber-400 text-white font-bold text-xs sm:text-sm rounded-xl transition-all shadow-lg shadow-amber-900/50 flex items-center gap-2 active:scale-95';
+    } else {
+      cookNextBtn.innerHTML = '<span>Next Step</span> <span>➡️</span>';
+      cookNextBtn.className = 'px-6 py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs sm:text-sm rounded-xl transition-all shadow-lg shadow-emerald-900/50 flex items-center gap-2 active:scale-95';
+    }
+
+    // Auto read if enabled
+    if (cookAutoRead && cookAutoRead.checked) {
+      speakCurrentStep();
+    }
+  }
+
+  function nextCookStep() {
+    if (state.cookMode.currentStep < state.cookMode.totalSteps - 1) {
+      state.cookMode.currentStep++;
+      renderCookStep();
+    } else {
+      showToast('🎉 Congratulations! You completed cooking this dish!', 'success');
+      playAlarmChime();
+      closeCookMode();
+    }
+  }
+
+  function prevCookStep() {
+    if (state.cookMode.currentStep > 0) {
+      state.cookMode.currentStep--;
+      renderCookStep();
+    }
+  }
+
+  // Voice Speech Synthesis (Hands-Free Natural Human Voice Reader)
+  let availableVoices = [];
+
+  function initVoiceSynthesis() {
+    if (!state.cookMode.synth) return;
+
+    function populateVoices() {
+      const rawVoices = state.cookMode.synth.getVoices();
+      if (!rawVoices || rawVoices.length === 0) return;
+
+      // Filter English or primary language voices
+      const englishVoices = rawVoices.filter(v => v.lang.startsWith('en') || v.lang.includes('US') || v.lang.includes('GB'));
+      const voicesToUse = englishVoices.length > 0 ? englishVoices : rawVoices;
+
+      // Score voices to prioritize natural human-like voice models
+      availableVoices = voicesToUse.map(v => {
+        let score = 0;
+        const name = v.name;
+
+        // Premium / Natural voice terms
+        if (name.includes('Natural') || name.includes('Enhanced') || name.includes('Online')) score += 50;
+        if (name.includes('Google')) score += 30;
+        if (name.includes('Samantha') || name.includes('Karen') || name.includes('Serena') || name.includes('Victoria')) score += 25;
+        if (name.includes('Daniel') || name.includes('Oliver') || name.includes('Ava') || name.includes('Zoey')) score += 25;
+        if (v.default) score += 10;
+        if (!v.localService) score += 5; // Remote neural web voices often sound more natural
+
+        return { voice: v, score, name: v.name };
+      }).sort((a, b) => b.score - a.score);
+
+      if (cookVoiceSelect) {
+        cookVoiceSelect.innerHTML = '';
+        availableVoices.forEach((vObj, idx) => {
+          const opt = document.createElement('option');
+          opt.value = idx;
+          const cleanName = vObj.name.replace(/Microsoft|Google|Apple|English|\(United States\)|\(United Kingdom\)/gi, '').trim();
+          opt.textContent = cleanName.length > 0 ? `${cleanName} ${vObj.score >= 25 ? '✨' : ''}` : vObj.name;
+          cookVoiceSelect.appendChild(opt);
+        });
+      }
+    }
+
+    populateVoices();
+    if (state.cookMode.synth.onvoiceschanged !== undefined) {
+      state.cookMode.synth.onvoiceschanged = populateVoices;
+    }
+  }
+
+  function formatTextForNaturalSpeech(text) {
+    if (!text) return '';
+    return text
+      .replace(/\b1\/2\b/g, 'one half')
+      .replace(/\b1\/4\b/g, 'one quarter')
+      .replace(/\b3\/4\b/g, 'three quarters')
+      .replace(/\b1\/3\b/g, 'one third')
+      .replace(/\b2\/3\b/g, 'two thirds')
+      .replace(/\btbsp\.?\b/gi, 'tablespoons')
+      .replace(/\btsp\.?\b/gi, 'teaspoons')
+      .replace(/\bmins\.?\b/gi, 'minutes')
+      .replace(/\bmin\.?\b/gi, 'minute')
+      .replace(/\bkg\.?\b/gi, 'kilograms')
+      .replace(/\bg\.?\b/gi, 'grams')
+      .replace(/\boz\.?\b/gi, 'ounces')
+      .replace(/\blb\.?\b/gi, 'pounds')
+      .replace(/°C/gi, ' degrees Celsius ')
+      .replace(/°F/gi, ' degrees Fahrenheit ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  function speakCurrentStep() {
+    if (!state.cookMode.synth) {
+      showToast('Text-to-speech is not supported in your browser.', 'error');
+      return;
+    }
+
+    state.cookMode.synth.cancel();
+
+    const rawStepText = cookStepText.textContent;
+    const cleanStepText = formatTextForNaturalSpeech(rawStepText);
+    const textToRead = `Step ${state.cookMode.currentStep + 1}. ${cleanStepText}`;
+
+    const utterance = new SpeechSynthesisUtterance(textToRead);
+
+    // Pick selected or best natural human voice
+    if (availableVoices.length > 0) {
+      const selectedIdx = cookVoiceSelect ? parseInt(cookVoiceSelect.value, 10) || 0 : 0;
+      const voiceObj = availableVoices[selectedIdx] || availableVoices[0];
+      if (voiceObj && voiceObj.voice) {
+        utterance.voice = voiceObj.voice;
+      }
+    }
+
+    const speed = parseFloat(cookVoiceSpeed ? cookVoiceSpeed.value : 1.0);
+    utterance.rate = speed;
+    utterance.pitch = 1.0; // Natural warm pitch
+
+    utterance.onstart = () => {
+      cookSpeakBtn.classList.add('speaking-active');
+      if (cookSpeakBtnText) cookSpeakBtnText.textContent = 'Speaking...';
+      if (cookPauseBtn) cookPauseBtn.classList.remove('hidden');
+    };
+
+    utterance.onend = utterance.onerror = () => {
+      cookSpeakBtn.classList.remove('speaking-active');
+      if (cookSpeakBtnText) cookSpeakBtnText.textContent = 'Read Step Aloud';
+      if (cookPauseBtn) cookPauseBtn.classList.add('hidden');
+    };
+
+    state.cookMode.synth.speak(utterance);
+  }
+
+  function stopSpeaking() {
+    if (state.cookMode.synth) {
+      state.cookMode.synth.cancel();
+    }
+    if (cookSpeakBtn) cookSpeakBtn.classList.remove('speaking-active');
+    if (cookSpeakBtnText) cookSpeakBtnText.textContent = 'Read Step Aloud';
+    if (cookPauseBtn) cookPauseBtn.classList.add('hidden');
+  }
+
+  // Timer Control Functions
+  function updateTimerDisplay() {
+    const mins = Math.floor(state.cookMode.timerSeconds / 60);
+    const secs = state.cookMode.timerSeconds % 60;
+    const formatted = `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+    cookTimerDisplay.textContent = formatted;
+  }
+
+  function startCookTimer() {
+    if (state.cookMode.isRunning) return;
+    state.cookMode.isRunning = true;
+    cookTimerStart.classList.add('hidden');
+    cookTimerPause.classList.remove('hidden');
+    cookTimerDisplay.classList.remove('timer-alarm-flash');
+
+    state.cookMode.timerInterval = setInterval(() => {
+      if (state.cookMode.timerSeconds > 0) {
+        state.cookMode.timerSeconds--;
+        updateTimerDisplay();
+      } else {
+        pauseCookTimer();
+        cookTimerDisplay.classList.add('timer-alarm-flash');
+        playAlarmChime();
+        showToast('⏰ Step Timer Finished! Time to proceed to next step.', 'success');
+      }
+    }, 1000);
+  }
+
+  function pauseCookTimer() {
+    state.cookMode.isRunning = false;
+    clearInterval(state.cookMode.timerInterval);
+    cookTimerStart.classList.remove('hidden');
+    cookTimerPause.classList.add('hidden');
+  }
+
+  function resetCookTimer() {
+    pauseCookTimer();
+    cookTimerDisplay.classList.remove('timer-alarm-flash');
+    state.cookMode.timerSeconds = state.cookMode.timerInitial;
+    updateTimerDisplay();
+  }
+
+  function addCookTimerTime(addedSeconds) {
+    state.cookMode.timerSeconds += addedSeconds;
+    state.cookMode.timerInitial += addedSeconds;
+    updateTimerDisplay();
+  }
+
+  // Synthetic Audio Chime using Web Audio API (No external sound file required!)
+  function playAlarmChime() {
+    try {
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      if (!AudioCtx) return;
+      const ctx = new AudioCtx();
+
+      const now = ctx.currentTime;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(587.33, now); // D5
+      osc.frequency.setValueAtTime(880, now + 0.15); // A5
+      osc.frequency.setValueAtTime(1174.66, now + 0.3); // D6
+
+      gain.gain.setValueAtTime(0.3, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.6);
+
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+
+      osc.start(now);
+      osc.stop(now + 0.6);
+    } catch (e) {
+      console.warn('Audio Context chime error:', e);
+    }
   }
 
   // Run app

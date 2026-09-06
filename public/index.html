@@ -345,12 +345,144 @@
       </div>
 
       <!-- Footer Action -->
-      <div class="p-6 bg-slate-50 border-t border-slate-200 flex items-center justify-between rounded-b-2xl">
-        <button id="modal-bookmark-btn" class="px-5 py-2.5 bg-white border border-slate-200 text-slate-700 hover:text-rose-600 font-bold text-sm rounded-xl transition-all shadow-sm flex items-center gap-2">
-          <span>❤️</span> <span id="modal-bookmark-text">Save to Favorites</span>
-        </button>
-        <button id="modal-close-footer-btn" class="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm rounded-xl transition-all shadow">
+      <div class="p-6 bg-slate-50 border-t border-slate-200 flex flex-wrap items-center justify-between gap-3 rounded-b-2xl">
+        <div class="flex items-center gap-2">
+          <button id="modal-bookmark-btn" class="px-4 py-2.5 bg-white border border-slate-200 text-slate-700 hover:text-rose-600 font-bold text-xs sm:text-sm rounded-xl transition-all shadow-sm flex items-center gap-2">
+            <span>❤️</span> <span id="modal-bookmark-text">Save to Favorites</span>
+          </button>
+          <button id="start-cook-mode-btn" class="px-5 py-2.5 bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs sm:text-sm rounded-xl transition-all shadow-md shadow-amber-200 active:scale-95 flex items-center gap-2">
+            <span>👨‍🍳</span> Start Cook Mode (Hands-Free)
+          </button>
+        </div>
+        <button id="modal-close-footer-btn" class="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs sm:text-sm rounded-xl transition-all shadow">
           Done
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ==================== HANDS-FREE COOK MODE OVERLAY ==================== -->
+  <div id="cook-mode-backdrop" class="stitch-dialog-backdrop">
+    <div class="stitch-cook-mode-container bg-white text-slate-900 rounded-3xl max-w-4xl w-full p-6 sm:p-10 shadow-2xl relative border border-slate-200 flex flex-col max-h-[92vh] overflow-y-auto">
+      
+      <!-- Top Navigation & Progress Header -->
+      <div class="flex items-center justify-between pb-4 border-b border-slate-200">
+        <div>
+          <span class="text-xs font-bold uppercase tracking-widest text-emerald-700 flex items-center gap-1.5">
+            <span class="w-2 h-2 rounded-full bg-emerald-600 animate-pulse"></span> Hands-Free Cook Mode
+          </span>
+          <h3 id="cook-mode-recipe-title" class="text-lg sm:text-xl font-extrabold text-slate-900 truncate max-w-md sm:max-w-xl">
+            Recipe Title
+          </h3>
+        </div>
+
+        <button id="close-cook-mode-btn" class="w-10 h-10 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-slate-900 flex items-center justify-center font-bold text-lg transition-all border border-slate-200">
+          ✕
+        </button>
+      </div>
+
+      <!-- Step Visual Progress Bar -->
+      <div class="w-full bg-slate-100 h-2.5 rounded-full mt-4 overflow-hidden border border-slate-200/60">
+        <div id="cook-mode-progress-bar" class="bg-emerald-600 h-full w-1/5 transition-all duration-300"></div>
+      </div>
+
+      <!-- Cook Mode Center Canvas -->
+      <div class="py-8 flex-1 flex flex-col items-center justify-center text-center space-y-6">
+        
+        <!-- Step Counter Badge -->
+        <div class="inline-flex items-center gap-2 px-4 py-1.5 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-full text-xs font-bold uppercase tracking-wider shadow-sm">
+          <span>📍</span> <span id="cook-mode-step-badge">Step 1 of 5</span>
+        </div>
+
+        <!-- Big Step Text -->
+        <div class="max-w-2xl px-2">
+          <p id="cook-mode-step-text" class="text-xl sm:text-2xl md:text-3xl font-extrabold leading-relaxed text-slate-900 tracking-tight">
+            Boil penne pasta in salted water according to package directions until al dente.
+          </p>
+        </div>
+
+        <!-- Audio Speech Controls Toolbar -->
+        <div class="flex flex-wrap items-center justify-center gap-3 pt-2">
+          <button id="cook-speak-btn" class="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs sm:text-sm rounded-xl transition-all shadow-md shadow-emerald-200 flex items-center gap-2 active:scale-95">
+            <span class="text-base">🔊</span> <span id="cook-speak-btn-text">Read Step Aloud</span>
+          </button>
+          <button id="cook-pause-btn" class="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs sm:text-sm rounded-xl transition-all border border-slate-200 flex items-center gap-2 hidden">
+            <span>⏸️</span> Pause Voice
+          </button>
+
+          <div class="flex items-center gap-1.5 bg-slate-50 px-3.5 py-2 rounded-xl border border-slate-200 text-xs font-medium text-slate-700 shadow-sm">
+            <span class="text-slate-500 font-semibold">Voice:</span>
+            <select id="cook-voice-select" class="bg-transparent text-emerald-700 font-bold focus:outline-none cursor-pointer max-w-[150px] truncate">
+              <option value="auto">Natural (Auto)</option>
+            </select>
+          </div>
+
+          <div class="flex items-center gap-1.5 bg-slate-50 px-3.5 py-2 rounded-xl border border-slate-200 text-xs font-medium text-slate-700 shadow-sm">
+            <span class="text-slate-500 font-semibold">Speed:</span>
+            <select id="cook-voice-speed" class="bg-transparent text-emerald-700 font-bold focus:outline-none cursor-pointer">
+              <option value="0.8">0.8x</option>
+              <option value="1.0" selected>1.0x</option>
+              <option value="1.2">1.2x</option>
+            </select>
+          </div>
+
+          <label class="flex items-center gap-2 bg-slate-50 px-3.5 py-2 rounded-xl border border-slate-200 text-xs text-slate-700 cursor-pointer hover:bg-slate-100 shadow-sm">
+            <input type="checkbox" id="cook-auto-read" class="rounded text-emerald-600 focus:ring-emerald-500 bg-white border-slate-300">
+            <span class="font-medium">Auto-read step change</span>
+          </label>
+        </div>
+
+        <!-- Smart Step Cooking Timer Widget -->
+        <div class="w-full max-w-md bg-slate-50 border border-slate-200 rounded-2xl p-5 shadow-sm space-y-3 mt-4">
+          <div class="flex items-center justify-between text-xs text-slate-500">
+            <span class="font-semibold flex items-center gap-1.5 text-slate-700">
+              <span>⏱️</span> Step Cooking Timer
+            </span>
+            <span id="cook-timer-detected" class="text-emerald-800 font-bold text-[11px] bg-emerald-100 px-2.5 py-0.5 rounded-full border border-emerald-200">
+              Detected: 8 mins
+            </span>
+          </div>
+
+          <!-- Timer Digital Display -->
+          <div class="flex items-center justify-center gap-4 py-2">
+            <div id="cook-timer-display" class="font-mono text-4xl sm:text-5xl font-extrabold tracking-wider text-emerald-700">
+              08:00
+            </div>
+          </div>
+
+          <!-- Timer Action Buttons -->
+          <div class="flex flex-wrap items-center justify-center gap-2 pt-1">
+            <button id="cook-timer-start" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl transition-all active:scale-95 flex items-center gap-1 shadow-sm">
+              <span>▶</span> Start
+            </button>
+            <button id="cook-timer-pause" class="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs rounded-xl transition-all active:scale-95 flex items-center gap-1 shadow-sm hidden">
+              <span>⏸</span> Pause
+            </button>
+            <button id="cook-timer-reset" class="px-3.5 py-2 bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 font-semibold text-xs rounded-xl transition-all shadow-sm">
+              🔄 Reset
+            </button>
+            <button class="cook-timer-add-btn px-3.5 py-2 bg-white border border-slate-200 hover:bg-emerald-50 hover:border-emerald-200 text-emerald-700 font-bold text-xs rounded-xl transition-all shadow-sm" data-seconds="60">
+              +1m
+            </button>
+            <button class="cook-timer-add-btn px-3.5 py-2 bg-white border border-slate-200 hover:bg-emerald-50 hover:border-emerald-200 text-emerald-700 font-bold text-xs rounded-xl transition-all shadow-sm" data-seconds="300">
+              +5m
+            </button>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Bottom Step Navigation Footer -->
+      <div class="flex items-center justify-between pt-4 border-t border-slate-200 gap-3">
+        <button id="cook-prev-btn" class="px-5 py-3 bg-white hover:bg-slate-100 text-slate-700 font-bold text-xs sm:text-sm rounded-xl transition-all border border-slate-200 flex items-center gap-2 shadow-sm">
+          <span>⬅️</span> Previous Step
+        </button>
+
+        <span class="text-xs text-slate-400 font-medium hidden sm:inline">Use ← → keys on keyboard to navigate</span>
+
+        <button id="cook-next-btn" class="px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs sm:text-sm rounded-xl transition-all shadow-md shadow-emerald-200 flex items-center gap-2 active:scale-95">
+          <span>Next Step</span> <span>➡️</span>
         </button>
       </div>
 
