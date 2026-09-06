@@ -117,7 +117,6 @@ document.addEventListener('DOMContentLoaded', () => {
     updateSavedCountBadge();
     renderChips();
     syncPresetTags();
-    initVoiceSynthesis();
 
     // Auto-fetch default initial demo recipe set for rich initial experience
     fetchRecipes();
