@@ -425,22 +425,22 @@ document.addEventListener('DOMContentLoaded', () => {
   function renderCurrentRecipesGrid() {
     let recipes = [...state.currentRecipes];
 
-    // Filter by Dietary checkboxes
-    if (filterVeg.checked) {
-      recipes = recipes.filter(r => r.dietary && r.dietary.includes('Vegetarian'));
+    // Filter by Dietary checkboxes (only filter if dietary metadata is defined or if matches)
+    if (filterVeg && filterVeg.checked) {
+      recipes = recipes.filter(r => !r.dietary || r.dietary.includes('Vegetarian'));
     }
-    if (filterVegan.checked) {
-      recipes = recipes.filter(r => r.dietary && r.dietary.includes('Vegan'));
+    if (filterVegan && filterVegan.checked) {
+      recipes = recipes.filter(r => !r.dietary || r.dietary.includes('Vegan'));
     }
-    if (filterGf.checked) {
-      recipes = recipes.filter(r => r.dietary && r.dietary.includes('Gluten-Free'));
+    if (filterGf && filterGf.checked) {
+      recipes = recipes.filter(r => !r.dietary || r.dietary.includes('Gluten-Free'));
     }
-    if (filterKeto.checked) {
-      recipes = recipes.filter(r => r.dietary && r.dietary.includes('Low-Carb'));
+    if (filterKeto && filterKeto.checked) {
+      recipes = recipes.filter(r => !r.dietary || r.dietary.includes('Low-Carb'));
     }
 
     // Apply Sorting
-    const sortVal = sortSelect.value;
+    const sortVal = sortSelect ? sortSelect.value : 'matched';
     if (sortVal === 'matched') {
       recipes.sort((a, b) => (b.usedIngredientCount || 0) - (a.usedIngredientCount || 0));
     } else if (sortVal === 'time') {
@@ -454,7 +454,7 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
-    // Hide other state elements
+    // Hide empty & loading states, show grid
     stateEmpty.classList.add('hidden');
     stateLoading.classList.add('hidden');
     stateNoMatch.classList.add('hidden');
