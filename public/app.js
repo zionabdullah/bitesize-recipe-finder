@@ -942,53 +942,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // Voice Speech Synthesis (Hands-Free Natural Human Voice Reader)
-  let availableVoices = [];
-
-  function initVoiceSynthesis() {
-    if (!state.cookMode.synth) return;
-
-    function populateVoices() {
-      const rawVoices = state.cookMode.synth.getVoices();
-      if (!rawVoices || rawVoices.length === 0) return;
-
-      // Filter English or primary language voices
-      const englishVoices = rawVoices.filter(v => v.lang.startsWith('en') || v.lang.includes('US') || v.lang.includes('GB'));
-      const voicesToUse = englishVoices.length > 0 ? englishVoices : rawVoices;
-
-      // Score voices to prioritize natural human-like voice models
-      availableVoices = voicesToUse.map(v => {
-        let score = 0;
-        const name = v.name;
-
-        // Premium / Natural voice terms
-        if (name.includes('Natural') || name.includes('Enhanced') || name.includes('Online')) score += 50;
-        if (name.includes('Google')) score += 30;
-        if (name.includes('Samantha') || name.includes('Karen') || name.includes('Serena') || name.includes('Victoria')) score += 25;
-        if (name.includes('Daniel') || name.includes('Oliver') || name.includes('Ava') || name.includes('Zoey')) score += 25;
-        if (v.default) score += 10;
-        if (!v.localService) score += 5; // Remote neural web voices often sound more natural
-
-        return { voice: v, score, name: v.name };
-      }).sort((a, b) => b.score - a.score);
-
-      if (cookVoiceSelect) {
-        cookVoiceSelect.innerHTML = '';
-        availableVoices.forEach((vObj, idx) => {
-          const opt = document.createElement('option');
-          opt.value = idx;
-          const cleanName = vObj.name.replace(/Microsoft|Google|Apple|English|\(United States\)|\(United Kingdom\)/gi, '').trim();
-          opt.textContent = cleanName.length > 0 ? `${cleanName} ${vObj.score >= 25 ? '✨' : ''}` : vObj.name;
-          cookVoiceSelect.appendChild(opt);
-        });
-      }
-    }
-
-    populateVoices();
-    if (state.cookMode.synth.onvoiceschanged !== undefined) {
-      state.cookMode.synth.onvoiceschanged = populateVoices;
-    }
-  }
+  // ElevenLabs AI Natural Female Voice Player (/api/tts integration)
+  let activeAudioPlayer = null;
 
   function formatTextForNaturalSpeech(text) {
     if (!text) return '';
@@ -1013,48 +968,42 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function speakCurrentStep() {
-    if (!state.cookMode.synth) {
-      showToast('Text-to-speech is not supported in your browser.', 'error');
-      return;
-    }
+    stopSpeaking();
 
-    state.cookMode.synth.cancel();
-
-    const rawStepText = cookStepText.textContent;
+    const rawStepText = cookStepText ? cookStepText.textContent : '';
     const cleanStepText = formatTextForNaturalSpeech(rawStepText);
     const textToRead = `Step ${state.cookMode.currentStep + 1}. ${cleanStepText}`;
 
-    const utterance = new SpeechSynthesisUtterance(textToRead);
-
-    // Pick selected or best natural human voice
-    if (availableVoices.length > 0) {
-      const selectedIdx = cookVoiceSelect ? parseInt(cookVoiceSelect.value, 10) || 0 : 0;
-      const voiceObj = availableVoices[selectedIdx] || availableVoices[0];
-      if (voiceObj && voiceObj.voice) {
-        utterance.voice = voiceObj.voice;
-      }
-    }
+    const ttsUrl = `/api/tts?text=${encodeURIComponent(textToRead)}`;
+    activeAudioPlayer = new Audio(ttsUrl);
 
     const speed = parseFloat(cookVoiceSpeed ? cookVoiceSpeed.value : 1.0);
-    utterance.rate = speed;
-    utterance.pitch = 1.0; // Natural warm pitch
+    activeAudioPlayer.playbackRate = speed;
 
-    utterance.onstart = () => {
-      cookSpeakBtn.classList.add('speaking-active');
-      if (cookSpeakBtnText) cookSpeakBtnText.textContent = 'Speaking...';
-      if (cookPauseBtn) cookPauseBtn.classList.remove('hidden');
-    };
+    cookSpeakBtn.classList.add('speaking-active');
+    if (cookSpeakBtnText) cookSpeakBtnText.textContent = 'Speaking...';
+    if (cookPauseBtn) cookPauseBtn.classList.remove('hidden');
 
-    utterance.onend = utterance.onerror = () => {
+    activeAudioPlayer.onended = activeAudioPlayer.onerror = () => {
       cookSpeakBtn.classList.remove('speaking-active');
       if (cookSpeakBtnText) cookSpeakBtnText.textContent = 'Read Step Aloud';
       if (cookPauseBtn) cookPauseBtn.classList.add('hidden');
     };
 
-    state.cookMode.synth.speak(utterance);
+    activeAudioPlayer.play().catch(err => {
+      console.warn('Audio playback error:', err);
+      cookSpeakBtn.classList.remove('speaking-active');
+      if (cookSpeakBtnText) cookSpeakBtnText.textContent = 'Read Step Aloud';
+      if (cookPauseBtn) cookPauseBtn.classList.add('hidden');
+    });
   }
 
   function stopSpeaking() {
+    if (activeAudioPlayer) {
+      activeAudioPlayer.pause();
+      activeAudioPlayer.currentTime = 0;
+      activeAudioPlayer = null;
+    }
     if (state.cookMode.synth) {
       state.cookMode.synth.cancel();
     }

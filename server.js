@@ -6,6 +6,8 @@ require('dotenv').config();
 const app = express();
 const PORT = process.env.PORT || 3000;
 const SPOONACULAR_API_KEY = process.env.SPOONACULAR_API_KEY || '';
+const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY || '';
+const ELEVENLABS_VOICE_ID = process.env.ELEVENLABS_VOICE_ID || '21m00Tcm4TlvDq8ikWAM'; // Rachel (Warm Natural Female Voice)
 
 app.use(cors());
 app.use(express.json());
@@ -358,6 +360,84 @@ app.get('/api/ingredients/autocomplete', async (req, res) => {
   // Mock autocomplete search
   const filtered = POPULAR_INGREDIENTS.filter(item => item.includes(q)).slice(0, 6);
   return res.json(filtered);
+});
+
+// 4. Text-to-Speech (TTS) Proxy Endpoint (ElevenLabs AI Female Voice + Free Fallback)
+app.get('/api/tts', async (req, res) => {
+  const { text } = req.query;
+
+  if (!text) {
+    return res.status(400).json({ error: 'Text query parameter is required.' });
+  }
+
+  const cleanText = String(text).trim().slice(0, 350);
+
+  // 1. Try ElevenLabs API if key exists
+  if (ELEVENLABS_API_KEY) {
+    try {
+      console.log(`[ElevenLabs TTS] Synthesizing audio with Rachel Voice...`);
+      const url = `https://api.elevenlabs.io/v1/text-to-speech/${ELEVENLABS_VOICE_ID}/stream`;
+      const apiRes = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Accept': 'audio/mpeg',
+          'Content-Type': 'application/json',
+          'xi-api-key': ELEVENLABS_API_KEY
+        },
+        body: JSON.stringify({
+          text: cleanText,
+          model_id: 'eleven_turbo_v2_5',
+          voice_settings: {
+            stability: 0.5,
+            similarity_boost: 0.75,
+            style: 0.0,
+            use_speaker_boost: true
+          }
+        })
+      });
+
+      if (apiRes.ok) {
+        const audioBuffer = await apiRes.arrayBuffer();
+        res.set({
+          'Content-Type': 'audio/mpeg',
+          'Content-Length': audioBuffer.byteLength,
+          'Cache-Control': 'public, max-age=86400'
+        });
+        return res.send(Buffer.from(audioBuffer));
+      } else {
+        const errText = await apiRes.text();
+        console.warn(`[ElevenLabs API Warning] Status ${apiRes.status}: ${errText}. Falling back to Neural TTS.`);
+      }
+    } catch (err) {
+      console.error(`[ElevenLabs API Error] ${err.message}. Falling back to Neural TTS.`);
+    }
+  } else {
+    console.log(`[TTS Proxy] No ELEVENLABS_API_KEY in .env. Serving Neural Female Voice Stream.`);
+  }
+
+  // 2. Free Neural Female Voice Fallback Stream
+  try {
+    const fallbackUrl = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodeURIComponent(cleanText)}&tl=en&client=tw-ob`;
+    const gRes = await fetch(fallbackUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)'
+      }
+    });
+
+    if (gRes.ok) {
+      const audioBuffer = await gRes.arrayBuffer();
+      res.set({
+        'Content-Type': 'audio/mpeg',
+        'Content-Length': audioBuffer.byteLength,
+        'Cache-Control': 'public, max-age=86400'
+      });
+      return res.send(Buffer.from(audioBuffer));
+    }
+  } catch (err) {
+    console.error(`[TTS Fallback Error] ${err.message}`);
+  }
+
+  return res.status(500).json({ error: 'Speech synthesis failed' });
 });
 
 // Start Server locally or export for Serverless (Vercel)
