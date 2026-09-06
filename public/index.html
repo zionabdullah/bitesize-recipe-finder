@@ -129,17 +129,18 @@
             Pantry Staples (Quick Add)
           </h3>
           <div class="flex flex-wrap gap-2" id="preset-tags-container">
-            <button class="stitch-preset-tag" data-ingredient="eggs">🥚 Eggs</button>
-            <button class="stitch-preset-tag" data-ingredient="garlic">🧄 Garlic</button>
-            <button class="stitch-preset-tag" data-ingredient="onion">🧅 Onion</button>
-            <button class="stitch-preset-tag" data-ingredient="tomato">🍅 Tomato</button>
-            <button class="stitch-preset-tag" data-ingredient="chicken">🍗 Chicken</button>
-            <button class="stitch-preset-tag" data-ingredient="rice">🍚 Rice</button>
-            <button class="stitch-preset-tag" data-ingredient="cheese">🧀 Cheese</button>
-            <button class="stitch-preset-tag" data-ingredient="butter">🧈 Butter</button>
-            <button class="stitch-preset-tag" data-ingredient="olive oil">🫒 Olive Oil</button>
-            <button class="stitch-preset-tag" data-ingredient="pasta">🍝 Pasta</button>
-            <button class="stitch-preset-tag" data-ingredient="salt">🧂 Salt</button>
+            <button class="stitch-preset-tag" data-ingredient="egg">🥚 Egg (ডিম)</button>
+            <button class="stitch-preset-tag" data-ingredient="onion">🧅 Onion (পিঁয়াজ)</button>
+            <button class="stitch-preset-tag" data-ingredient="green chili">🌶️ Green Chili (কাঁচা মরিচ)</button>
+            <button class="stitch-preset-tag" data-ingredient="potato">🥔 Potato (আলু)</button>
+            <button class="stitch-preset-tag" data-ingredient="chicken">🍗 Chicken (মুরগি)</button>
+            <button class="stitch-preset-tag" data-ingredient="beef">🥩 Beef (গরুর মাংস)</button>
+            <button class="stitch-preset-tag" data-ingredient="mustard oil">🫒 Mustard Oil (সরিষার তেল)</button>
+            <button class="stitch-preset-tag" data-ingredient="rice">🍚 Rice (চাল / ভাত)</button>
+            <button class="stitch-preset-tag" data-ingredient="lentil">🥣 Masoor Dal (মসুর ডাল)</button>
+            <button class="stitch-preset-tag" data-ingredient="eggplant">🍆 Eggplant (বেগুন)</button>
+            <button class="stitch-preset-tag" data-ingredient="fish">🐟 Fish / Ilish (মাছ)</button>
+            <button class="stitch-preset-tag" data-ingredient="garlic">🧄 Garlic (রসুন)</button>
           </div>
         </div>
 
@@ -149,6 +150,10 @@
             Dietary Preferences
           </h3>
           <div class="grid grid-cols-2 gap-2 text-xs font-medium text-slate-600">
+            <label class="flex items-center gap-2 p-2 bg-slate-50 rounded-lg border border-slate-200 cursor-pointer hover:bg-slate-100 transition-colors">
+              <input type="checkbox" id="filter-halal" class="rounded text-emerald-600 focus:ring-emerald-500">
+              <span>☪️ Halal</span>
+            </label>
             <label class="flex items-center gap-2 p-2 bg-slate-50 rounded-lg border border-slate-200 cursor-pointer hover:bg-slate-100 transition-colors">
               <input type="checkbox" id="filter-veg" class="rounded text-emerald-600 focus:ring-emerald-500">
               <span>🌱 Vegetarian</span>
@@ -160,10 +165,6 @@
             <label class="flex items-center gap-2 p-2 bg-slate-50 rounded-lg border border-slate-200 cursor-pointer hover:bg-slate-100 transition-colors">
               <input type="checkbox" id="filter-gf" class="rounded text-emerald-600 focus:ring-emerald-500">
               <span>🌾 Gluten-Free</span>
-            </label>
-            <label class="flex items-center gap-2 p-2 bg-slate-50 rounded-lg border border-slate-200 cursor-pointer hover:bg-slate-100 transition-colors">
-              <input type="checkbox" id="filter-keto" class="rounded text-emerald-600 focus:ring-emerald-500">
-              <span>🥑 Low-Carb</span>
             </label>
           </div>
         </div>
@@ -178,24 +179,23 @@
       </aside>
 
       <!-- ---------------- RIGHT PANEL: RECIPE RESULTS CANVAS (70% Desktop) ---------------- -->
-      <section class="w-full lg:w-[68%] space-y-5">
-        
-        <!-- Canvas Header Bar -->
-        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
+      <section class="lg:w-7/12 xl:w-3/4 space-y-6">
+
+        <!-- Header bar with Canvas Title & Sort Select -->
+        <div class="bg-white border border-slate-200 rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-sm">
           <div>
-            <h2 id="canvas-title" class="text-lg font-bold text-slate-900 flex items-center gap-2">
-              <span>✨</span> Recommended Recipes
-            </h2>
-            <p id="canvas-subtitle" class="text-xs text-slate-500">
-              Select ingredients on the left to match delicious dishes.
-            </p>
+            <h2 id="canvas-title" class="text-lg font-bold text-slate-900">Recommended Recipes</h2>
+            <p id="canvas-subtitle" class="text-xs text-slate-500">Matching your selected ingredients</p>
           </div>
 
-          <div class="flex items-center gap-3">
-            <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Sort by:</span>
-            <select id="sort-select" class="text-xs font-semibold bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-slate-700">
+          <div class="flex items-center gap-2 w-full sm:w-auto">
+            <span class="text-xs font-semibold text-slate-500 whitespace-nowrap">Sort by:</span>
+            <select 
+              id="sort-select" 
+              class="px-3 py-1.5 text-xs font-semibold bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 cursor-pointer"
+            >
               <option value="matched">Most Ingredients Matched</option>
-              <option value="time">Fastest Cooking Time</option>
+              <option value="time">Fastest Preparation Time</option>
               <option value="calories">Lowest Calories</option>
             </select>
           </div>
@@ -211,14 +211,17 @@
             </div>
             <h3 class="text-xl font-bold text-slate-900">What's in your fridge today?</h3>
             <p class="text-sm text-slate-500 max-w-md mx-auto leading-relaxed">
-              Add your leftover vegetables, proteins, and pantry items to BiteSize. We'll find recipes that maximize what you already have!
+              Add your household ingredients, spices, or leftover items to BiteSize. We'll show authentic Bangladeshi home recipes you can cook right now!
             </p>
             <div class="pt-2 flex flex-wrap justify-center gap-2">
-              <button class="px-4 py-2 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 font-semibold text-xs rounded-full border border-emerald-200 transition-colors quick-demo-btn" data-preset="tomato,garlic,chicken,pasta">
-                🍝 Try Demo: Chicken Garlic Pasta
+              <button class="px-4 py-2 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 font-semibold text-xs rounded-full border border-emerald-200 transition-colors quick-demo-btn" data-preset="chicken,onion,garlic,mustard oil">
+                🍗 Try Demo: Chicken Bhuna (মুরগির ভুনা)
               </button>
-              <button class="px-4 py-2 bg-amber-50 text-amber-700 hover:bg-amber-100 font-semibold text-xs rounded-full border border-amber-200 transition-colors quick-demo-btn" data-preset="eggs,tomato,onion">
-                🍳 Try Demo: Egg Shakshuka
+              <button class="px-4 py-2 bg-amber-50 text-amber-700 hover:bg-amber-100 font-semibold text-xs rounded-full border border-amber-200 transition-colors quick-demo-btn" data-preset="egg,potato,onion,green chili">
+                🍳 Try Demo: Dim Bhuna (ডিম ও আলু ভুনা)
+              </button>
+              <button class="px-4 py-2 bg-rose-50 text-rose-700 hover:bg-rose-100 font-semibold text-xs rounded-full border border-rose-200 transition-colors quick-demo-btn" data-preset="fish,mustard oil,green chili,turmeric">
+                🐟 Try Demo: Shorshe Ilish (সরষে ইলিশ)
               </button>
             </div>
           </div>
