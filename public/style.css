@@ -360,3 +360,64 @@ body {
     transform: translateY(0);
   }
 }
+
+/* Scanner Laser Sweep Keyframe Animation */
+@keyframes scanLine {
+  0% {
+    top: 0%;
+    opacity: 0.8;
+  }
+  50% {
+    top: 95%;
+    opacity: 1;
+  }
+  100% {
+    top: 0%;
+    opacity: 0.8;
+  }
+}
+
+.animate-scan-line {
+  position: absolute;
+  animation: scanLine 2s ease-in-out infinite;
+}
+
+/* Virtual Fridge Stored Chips */
+.fridge-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.25rem 0.6rem;
+  border-radius: var(--radius-full);
+  font-size: 0.75rem;
+  font-weight: 600;
+  background-color: #ECFDF5;
+  color: #047857;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  transition: all var(--transition-fast);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+}
+
+.fridge-chip:hover {
+  background-color: #D1FAE5;
+  transform: translateY(-1px);
+}
+
+.fridge-chip .chip-remove-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: rgba(4, 120, 87, 0.15);
+  color: #047857;
+  cursor: pointer;
+  font-size: 10px;
+}
+
+.fridge-chip .chip-remove-btn:hover {
+  background: rgba(239, 68, 68, 0.9);
+  color: #FFFFFF;
+}
+

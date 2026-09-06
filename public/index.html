@@ -51,14 +51,18 @@
 
     <!-- Center Navigation Tabs -->
     <nav class="flex items-center gap-1 bg-slate-100/80 p-1 rounded-full border border-slate-200">
-      <button id="nav-discover-btn" class="px-4 py-1.5 text-xs sm:text-sm font-semibold rounded-full bg-white text-emerald-700 shadow-sm transition-all flex items-center gap-1.5">
+      <button id="nav-discover-btn" class="px-3.5 py-1.5 text-xs sm:text-sm font-semibold rounded-full bg-white text-emerald-700 shadow-sm transition-all flex items-center gap-1.5">
         <span>🔍</span> Discover
       </button>
-      <button id="nav-saved-btn" class="px-4 py-1.5 text-xs sm:text-sm font-medium rounded-full text-slate-600 hover:text-slate-900 transition-all flex items-center gap-1.5">
+      <button id="nav-snap-btn" class="px-3.5 py-1.5 text-xs sm:text-sm font-semibold rounded-full text-slate-600 hover:text-emerald-700 hover:bg-white/60 transition-all flex items-center gap-1.5">
+        <span>📸</span> AI Snap
+      </button>
+      <button id="nav-saved-btn" class="px-3.5 py-1.5 text-xs sm:text-sm font-medium rounded-full text-slate-600 hover:text-slate-900 transition-all flex items-center gap-1.5">
         <span>❤️</span> Saved
         <span id="saved-count-badge" class="ml-1 text-[11px] px-1.5 py-0.2 bg-orange-100 text-orange-700 font-bold rounded-full">0</span>
       </button>
     </nav>
+
 
     <!-- Auth / User Profile Action -->
     <div class="flex items-center gap-3">
@@ -78,7 +82,47 @@
       <!-- ---------------- LEFT PANEL: INGREDIENT PICKER (30% Desktop) ---------------- -->
       <aside class="w-full lg:w-[32%] bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-6">
         
+        <!-- Smart Virtual Fridge Card -->
+        <div class="bg-gradient-to-br from-emerald-50 via-teal-50/60 to-emerald-100/40 border border-emerald-200 rounded-2xl p-4 shadow-sm space-y-3 relative overflow-hidden">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2">
+              <div class="w-9 h-9 rounded-xl bg-emerald-600 text-white flex items-center justify-center text-base shadow-sm font-bold">
+                🧊
+              </div>
+              <div>
+                <h3 class="text-sm font-bold text-slate-900 flex items-center gap-1.5">
+                  My Virtual Fridge
+                  <span id="fridge-item-count" class="text-[11px] bg-emerald-200 text-emerald-900 font-bold px-2 py-0.5 rounded-full">0</span>
+                </h3>
+                <p class="text-[11px] text-slate-500">Camera scanned items</p>
+              </div>
+            </div>
+            <button id="sidebar-snap-btn" class="px-3 py-1.5 text-xs font-bold bg-white text-emerald-700 hover:bg-emerald-600 hover:text-white border border-emerald-300 rounded-xl transition-all flex items-center gap-1.5 shadow-sm active:scale-95">
+              <span>📸</span> Scan
+            </button>
+          </div>
+
+          <!-- Stored Fridge Items Chips Container -->
+          <div id="virtual-fridge-chips" class="flex flex-wrap gap-1.5 min-h-[40px] p-2 bg-white/90 backdrop-blur-xs border border-emerald-100 rounded-xl">
+            <span class="text-xs text-slate-400 italic">No fridge items stored yet. Tap Scan!</span>
+          </div>
+
+          <!-- Direct Add to Fridge Input -->
+          <div class="flex items-center gap-1.5">
+            <input type="text" id="fridge-add-input" placeholder="+ Add fridge item" class="flex-1 px-3 py-1.5 text-xs bg-white border border-emerald-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 placeholder:text-slate-400">
+            <button id="fridge-add-btn" class="px-3 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs rounded-lg transition-all shadow-xs">
+              Add
+            </button>
+          </div>
+
+          <!-- CTA Button: Cook Now from Fridge -->
+          <button id="cook-from-fridge-btn" class="w-full py-2.5 bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-700 hover:to-teal-800 text-white font-bold text-xs sm:text-sm rounded-xl shadow-md shadow-emerald-600/20 transition-all flex items-center justify-center gap-2 active:scale-98">
+            <span>🍳</span> Cook Now with Fridge Items
+          </button>
+        </div>
+
         <div>
+
           <div class="flex items-center justify-between mb-2">
             <h2 class="text-base font-bold text-slate-900 flex items-center gap-2">
               <span>🥑</span> My Ingredients
@@ -386,9 +430,106 @@
         </button>
       </form>
     </div>
+  <!-- ==================== AI FRIDGE VISION CAMERA MODAL ==================== -->
+  <div id="fridge-snap-modal" class="stitch-dialog-backdrop">
+    <div class="stitch-dialog-full max-w-lg p-6 space-y-5 relative bg-white border border-slate-200 rounded-3xl shadow-2xl overflow-hidden">
+      
+      <!-- Close Button -->
+      <button id="close-snap-modal-btn" class="absolute top-4 right-4 w-9 h-9 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center justify-center font-bold text-sm z-20 transition-all">
+        ✕
+      </button>
+
+      <!-- Modal Header -->
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-2xl bg-gradient-to-tr from-emerald-500 to-teal-600 text-white flex items-center justify-center text-xl font-bold shadow-md shadow-emerald-200">
+          📸
+        </div>
+        <div>
+          <h3 class="text-lg font-bold text-slate-900 flex items-center gap-2">
+            AI Fridge Scanner
+            <span class="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded-full">Gemini Vision</span>
+          </h3>
+          <p class="text-xs text-slate-500">Snap a photo of your fridge or pantry to auto-detect ingredients.</p>
+        </div>
+      </div>
+
+      <!-- Mode Switch Tabs (Live Camera vs Upload File) -->
+      <div class="flex items-center p-1 bg-slate-100 rounded-xl gap-1">
+        <button id="tab-mode-camera" class="flex-1 py-1.5 text-xs font-bold rounded-lg bg-white text-emerald-700 shadow-xs transition-all flex items-center justify-center gap-1.5">
+          <span>📷</span> Live Camera
+        </button>
+        <button id="tab-mode-upload" class="flex-1 py-1.5 text-xs font-medium rounded-lg text-slate-600 hover:text-slate-900 transition-all flex items-center justify-center gap-1.5">
+          <span>📁</span> Upload Photo
+        </button>
+      </div>
+
+      <!-- Camera Viewfinder & Preview Box -->
+      <div class="relative w-full h-64 bg-slate-950 rounded-2xl overflow-hidden flex items-center justify-center border border-slate-800 shadow-inner group">
+        
+        <!-- Live Video Element -->
+        <video id="camera-stream" autoplay playsinline class="w-full h-full object-cover"></video>
+        
+        <!-- Image Preview Container (Hidden initially) -->
+        <img id="snap-preview-img" class="w-full h-full object-cover hidden" alt="Snapshot Preview">
+        
+        <!-- Hidden Canvas for capture -->
+        <canvas id="snapshot-canvas" class="hidden"></canvas>
+
+        <!-- Scanning Laser Animation Overlay -->
+        <div id="scanning-overlay" class="absolute inset-0 pointer-events-none hidden flex flex-col items-center justify-between p-4 bg-emerald-950/20 backdrop-blur-[1px]">
+          <div class="w-full h-1 bg-gradient-to-r from-transparent via-emerald-400 to-transparent shadow-[0_0_15px_#34d399] animate-scan-line"></div>
+          <div class="px-3 py-1.5 rounded-full bg-slate-900/80 text-emerald-400 text-xs font-bold tracking-wide flex items-center gap-2 shadow-lg backdrop-blur-md">
+            <span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+            AI Analyzing Ingredients...
+          </div>
+        </div>
+
+        <!-- Dropzone File Upload View (Hidden initially) -->
+        <div id="upload-dropzone" class="absolute inset-0 bg-slate-900 flex flex-col items-center justify-center p-6 text-center text-white space-y-3 cursor-pointer hover:bg-slate-800/90 transition-all hidden">
+          <div class="w-12 h-12 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center text-2xl">
+            📥
+          </div>
+          <div>
+            <p class="text-sm font-semibold">Click or drag & drop fridge picture</p>
+            <p class="text-xs text-slate-400 mt-1">Supports JPG, PNG, WEBP up to 10MB</p>
+          </div>
+          <input type="file" id="fridge-file-input" accept="image/*" capture="environment" class="hidden">
+        </div>
+      </div>
+
+      <!-- Action Buttons Row -->
+      <div class="flex items-center gap-3">
+        <button id="capture-snap-btn" class="flex-1 py-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-bold text-sm rounded-xl shadow-lg shadow-emerald-600/25 transition-all flex items-center justify-center gap-2 active:scale-98">
+          <span>📸</span> Capture & Scan Photo
+        </button>
+        <button id="retake-snap-btn" class="px-4 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition-all hidden">
+          🔄 Retake
+        </button>
+      </div>
+
+      <!-- Scanning Results Container -->
+      <div id="snap-results-container" class="space-y-3 hidden border-t border-slate-100 pt-3">
+        <div class="flex items-center justify-between">
+          <h4 class="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
+            <span>✨</span> Recognized Ingredients (<span id="detected-count">0</span>)
+          </h4>
+          <span class="text-[11px] text-emerald-600 font-semibold bg-emerald-50 px-2 py-0.5 rounded-md">100% Match</span>
+        </div>
+
+        <div id="detected-chips-container" class="flex flex-wrap gap-2 p-3 bg-slate-50 border border-slate-200 rounded-xl min-h-[48px]">
+          <!-- Dynamic detected ingredient chips -->
+        </div>
+
+        <button id="import-to-fridge-btn" class="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs sm:text-sm rounded-xl shadow-md transition-all flex items-center justify-center gap-2 active:scale-98">
+          <span>📥</span> Save Items to My Virtual Fridge
+        </button>
+      </div>
+
+    </div>
   </div>
 
   <!-- Toast Notification Container -->
+
   <div id="toast-container" class="toast-container"></div>
 
   <!-- Client JavaScript -->
