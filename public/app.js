@@ -8,7 +8,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // 1. APPLICATION STATE
   // -------------------------------------------------------------------
   const state = {
-    activeIngredients: ['tomato', 'garlic', 'chicken', 'pasta'],
+    activeIngredients: ['chicken', 'onion', 'garlic', 'mustard oil'],
     savedRecipes: JSON.parse(localStorage.getItem('bitesize_saved_recipes') || '[]'),
     currentRecipes: [],
     activeTab: 'discover', // 'discover' | 'saved'
@@ -82,10 +82,10 @@ document.addEventListener('DOMContentLoaded', () => {
   const toastContainer = document.getElementById('toast-container');
 
   // Dietary Checkboxes
+  const filterHalal = document.getElementById('filter-halal');
   const filterVeg = document.getElementById('filter-veg');
   const filterVegan = document.getElementById('filter-vegan');
   const filterGf = document.getElementById('filter-gf');
-  const filterKeto = document.getElementById('filter-keto');
 
   // Cook Mode Elements
   const startCookModeBtn = document.getElementById('start-cook-mode-btn');
@@ -140,6 +140,12 @@ document.addEventListener('DOMContentLoaded', () => {
     if (cookTimerReset) cookTimerReset.addEventListener('click', resetCookTimer);
     if (cookPrevBtn) cookPrevBtn.addEventListener('click', prevCookStep);
     if (cookNextBtn) cookNextBtn.addEventListener('click', nextCookStep);
+
+    // Filter checkbox listeners
+    if (filterHalal) filterHalal.addEventListener('change', renderCurrentRecipesGrid);
+    if (filterVeg) filterVeg.addEventListener('change', renderCurrentRecipesGrid);
+    if (filterVegan) filterVegan.addEventListener('change', renderCurrentRecipesGrid);
+    if (filterGf) filterGf.addEventListener('change', renderCurrentRecipesGrid);
 
     document.querySelectorAll('.cook-timer-add-btn').forEach(btn => {
       btn.addEventListener('click', (e) => {
@@ -425,6 +431,9 @@ document.addEventListener('DOMContentLoaded', () => {
     let recipes = [...state.currentRecipes];
 
     // Filter by Dietary checkboxes (only filter if dietary metadata is defined or if matches)
+    if (filterHalal && filterHalal.checked) {
+      recipes = recipes.filter(r => !r.dietary || r.dietary.includes('Halal'));
+    }
     if (filterVeg && filterVeg.checked) {
       recipes = recipes.filter(r => !r.dietary || r.dietary.includes('Vegetarian'));
     }
@@ -433,9 +442,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     if (filterGf && filterGf.checked) {
       recipes = recipes.filter(r => !r.dietary || r.dietary.includes('Gluten-Free'));
-    }
-    if (filterKeto && filterKeto.checked) {
-      recipes = recipes.filter(r => !r.dietary || r.dietary.includes('Low-Carb'));
     }
 
     // Apply Sorting
