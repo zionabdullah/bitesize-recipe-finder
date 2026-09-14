@@ -922,8 +922,17 @@ document.addEventListener('DOMContentLoaded', () => {
       tabModeUpload.classList.add('text-slate-600', 'font-medium');
 
       uploadDropzone.classList.add('hidden');
-      cameraStreamVideo.classList.remove('hidden');
-      startCamera();
+      
+      if (state.currentCapturedBase64) {
+        cameraStreamVideo.classList.add('hidden');
+        snapPreviewImg.classList.remove('hidden');
+        captureSnapBtn.innerHTML = `<span>⚡</span> Scan Selected Photo`;
+      } else {
+        snapPreviewImg.classList.add('hidden');
+        cameraStreamVideo.classList.remove('hidden');
+        captureSnapBtn.innerHTML = `<span>📸</span> Capture & Scan Photo`;
+        startCamera();
+      }
     } else {
       tabModeUpload.classList.add('bg-white', 'text-emerald-700', 'shadow-xs', 'font-bold');
       tabModeUpload.classList.remove('text-slate-600', 'font-medium');
@@ -933,26 +942,63 @@ document.addEventListener('DOMContentLoaded', () => {
 
       stopCamera();
       cameraStreamVideo.classList.add('hidden');
-      uploadDropzone.classList.remove('hidden');
+
+      if (state.currentCapturedBase64) {
+        snapPreviewImg.classList.remove('hidden');
+        uploadDropzone.classList.add('hidden');
+        captureSnapBtn.innerHTML = `<span>⚡</span> Scan Selected Photo`;
+      } else {
+        snapPreviewImg.classList.add('hidden');
+        uploadDropzone.classList.remove('hidden');
+        captureSnapBtn.innerHTML = `<span>📁</span> Select / Take Photo`;
+      }
     }
   }
 
   async function startCamera() {
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-      showToast('Camera not supported on this browser/device. Switched to upload mode.', 'info');
+      showToast('Live camera requires HTTPS on mobile. Switched to Photo Upload / Camera Take.', 'info');
       setSnapMode('upload');
       return;
     }
 
     try {
       stopCamera();
-      state.cameraStream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } }
-      });
-      cameraStreamVideo.srcObject = state.cameraStream;
+
+      // Constraint Attempt 1: Rear camera preferred on mobile
+      let stream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } }
+        });
+      } catch (e1) {
+        // Constraint Attempt 2: Generic video fallback
+        console.warn('Environment camera constraint failed, trying standard camera:', e1);
+        stream = await navigator.mediaDevices.getUserMedia({ video: true });
+      }
+
+      state.cameraStream = stream;
+      cameraStreamVideo.srcObject = stream;
+      cameraStreamVideo.muted = true;
+
+      try {
+        await cameraStreamVideo.play();
+      } catch (playErr) {
+        console.warn('Video play call error:', playErr);
+      }
+
+      // Check if video actually renders within 1.5s (e.g. mobile HTTP permission block)
+      setTimeout(() => {
+        if (state.snapMode === 'camera' && !state.currentCapturedBase64 && (!cameraStreamVideo.videoWidth || cameraStreamVideo.paused)) {
+          console.warn('Camera stream active but video width is 0. Switching to Upload fallback.');
+          showToast('Switched to Photo / Camera Upload mode.', 'info');
+          setSnapMode('upload');
+        }
+      }, 1500);
+
     } catch (err) {
-      console.warn('Camera access denied or unavailable:', err);
-      showToast('Could not access camera. Please upload a photo instead.', 'info');
+      console.warn('Camera access error:', err);
+      showToast('Camera stream unavailable. Switched to Photo / Camera Upload.', 'info');
       setSnapMode('upload');
     }
   }
@@ -965,18 +1011,23 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function resetSnapModalState() {
+    state.currentCapturedBase64 = null;
+    snapPreviewImg.src = '';
     snapPreviewImg.classList.add('hidden');
     snapResultsContainer.classList.add('hidden');
     scanningOverlay.classList.add('hidden');
     retakeSnapBtn.classList.add('hidden');
     captureSnapBtn.classList.remove('hidden');
     captureSnapBtn.disabled = false;
-    captureSnapBtn.innerHTML = `<span>📸</span> Capture & Scan Photo`;
-
+    
     if (state.snapMode === 'camera') {
+      captureSnapBtn.innerHTML = `<span>📸</span> Capture & Scan Photo`;
       cameraStreamVideo.classList.remove('hidden');
+      uploadDropzone.classList.add('hidden');
       startCamera();
     } else {
+      captureSnapBtn.innerHTML = `<span>📁</span> Select / Take Photo`;
+      cameraStreamVideo.classList.add('hidden');
       uploadDropzone.classList.remove('hidden');
     }
   }
@@ -995,38 +1046,42 @@ document.addEventListener('DOMContentLoaded', () => {
       state.currentCapturedBase64 = event.target.result;
       snapPreviewImg.src = state.currentCapturedBase64;
       snapPreviewImg.classList.remove('hidden');
+      cameraStreamVideo.classList.add('hidden');
       uploadDropzone.classList.add('hidden');
-      captureSnapBtn.innerHTML = `<span>⚡</span> Scan Uploaded Photo`;
+      retakeSnapBtn.classList.remove('hidden');
+      captureSnapBtn.innerHTML = `<span>⚡</span> Scan Selected Photo`;
+      captureSnapBtn.classList.remove('hidden');
+      captureSnapBtn.disabled = false;
     };
     reader.readAsDataURL(file);
   }
 
   async function handleCaptureAndScan() {
-    let base64Image = '';
+    let base64Image = state.currentCapturedBase64 || '';
 
-    if (state.snapMode === 'camera') {
-      if (!cameraStreamVideo.videoWidth) {
-        showToast('Camera feed loading... Please try again in a moment.', 'info');
+    if (!base64Image && state.snapMode === 'camera') {
+      // If camera stream is not active or video is paused/0px, open file/camera picker fallback!
+      if (!cameraStreamVideo.videoWidth || cameraStreamVideo.paused) {
+        showToast('Opening camera/file picker...', 'info');
+        if (fridgeFileInput) fridgeFileInput.click();
         return;
       }
 
-      snapshotCanvas.width = cameraStreamVideo.videoWidth;
-      snapshotCanvas.height = cameraStreamVideo.videoHeight;
+      snapshotCanvas.width = cameraStreamVideo.videoWidth || 640;
+      snapshotCanvas.height = cameraStreamVideo.videoHeight || 480;
       const ctx = snapshotCanvas.getContext('2d');
       ctx.drawImage(cameraStreamVideo, 0, 0, snapshotCanvas.width, snapshotCanvas.height);
 
-      base64Image = snapshotCanvas.toDataURL('image/jpeg', 0.8);
+      base64Image = snapshotCanvas.toDataURL('image/jpeg', 0.85);
+      state.currentCapturedBase64 = base64Image;
       stopCamera();
 
       snapPreviewImg.src = base64Image;
       cameraStreamVideo.classList.add('hidden');
       snapPreviewImg.classList.remove('hidden');
-    } else {
-      base64Image = state.currentCapturedBase64;
-      if (!base64Image) {
-        showToast('Please choose an image file to scan first.', 'error');
-        return;
-      }
+    } else if (!base64Image) {
+      if (fridgeFileInput) fridgeFileInput.click();
+      return;
     }
 
     // Show Scanning State UI

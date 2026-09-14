@@ -430,6 +430,8 @@
         </button>
       </form>
     </div>
+  </div>
+
   <!-- ==================== AI FRIDGE VISION CAMERA MODAL ==================== -->
   <div id="fridge-snap-modal" class="stitch-dialog-backdrop">
     <div class="stitch-dialog-full max-w-lg p-6 space-y-5 relative bg-white border border-slate-200 rounded-3xl shadow-2xl overflow-hidden">
@@ -467,7 +469,7 @@
       <div class="relative w-full h-64 bg-slate-950 rounded-2xl overflow-hidden flex items-center justify-center border border-slate-800 shadow-inner group">
         
         <!-- Live Video Element -->
-        <video id="camera-stream" autoplay playsinline class="w-full h-full object-cover"></video>
+        <video id="camera-stream" autoplay playsinline webkit-playsinline muted class="w-full h-full object-cover"></video>
         
         <!-- Image Preview Container (Hidden initially) -->
         <img id="snap-preview-img" class="w-full h-full object-cover hidden" alt="Snapshot Preview">
@@ -476,7 +478,7 @@
         <canvas id="snapshot-canvas" class="hidden"></canvas>
 
         <!-- Scanning Laser Animation Overlay -->
-        <div id="scanning-overlay" class="absolute inset-0 pointer-events-none hidden flex flex-col items-center justify-between p-4 bg-emerald-950/20 backdrop-blur-[1px]">
+        <div id="scanning-overlay" class="absolute inset-0 pointer-events-none hidden flex flex-col items-center justify-between p-4 bg-emerald-950/20 backdrop-blur-[1px] z-20">
           <div class="w-full h-1 bg-gradient-to-r from-transparent via-emerald-400 to-transparent shadow-[0_0_15px_#34d399] animate-scan-line"></div>
           <div class="px-3 py-1.5 rounded-full bg-slate-900/80 text-emerald-400 text-xs font-bold tracking-wide flex items-center gap-2 shadow-lg backdrop-blur-md">
             <span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
@@ -485,16 +487,20 @@
         </div>
 
         <!-- Dropzone File Upload View (Hidden initially) -->
-        <div id="upload-dropzone" class="absolute inset-0 bg-slate-900 flex flex-col items-center justify-center p-6 text-center text-white space-y-3 cursor-pointer hover:bg-slate-800/90 transition-all hidden">
-          <div class="w-12 h-12 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center text-2xl">
-            📥
+        <label id="upload-dropzone" for="fridge-file-input" class="absolute inset-0 bg-slate-900 flex flex-col items-center justify-center p-6 text-center text-white space-y-3 cursor-pointer hover:bg-slate-800/90 transition-all hidden z-10">
+          <div class="w-14 h-14 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center text-3xl shadow-inner">
+            📸
           </div>
           <div>
-            <p class="text-sm font-semibold">Click or drag & drop fridge picture</p>
-            <p class="text-xs text-slate-400 mt-1">Supports JPG, PNG, WEBP up to 10MB</p>
+            <p class="text-sm font-bold text-white">Tap to Take Photo or Upload Image</p>
+            <p class="text-xs text-slate-300 mt-1">Uses mobile camera or photo gallery</p>
           </div>
+          <span class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl shadow-md transition-all">
+            📁 Choose / Take Photo
+          </span>
           <input type="file" id="fridge-file-input" accept="image/*" capture="environment" class="hidden">
-        </div>
+        </label>
+
       </div>
 
       <!-- Action Buttons Row -->

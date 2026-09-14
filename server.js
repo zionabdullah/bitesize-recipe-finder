@@ -373,21 +373,22 @@ app.post('/api/vision/scan-fridge', async (req, res) => {
 
   console.log(`[AI Vision Proxy] Fridge scan requested. Image data payload length: ${image.length}`);
 
-  // If GEMINI_API_KEY is available, call Gemini 1.5/2.0 Flash Vision REST API
+  // If GEMINI_API_KEY is available, call Gemini Vision REST API
   if (GEMINI_API_KEY) {
     try {
       const mimeTypeMatch = image.match(/^data:(image\/\w+);base64,/);
       const mimeType = mimeTypeMatch ? mimeTypeMatch[1] : 'image/jpeg';
       const base64Data = image.replace(/^data:image\/\w+;base64,/, '');
 
-      const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`;
+      // Using gemini-3.6-flash for fast multimodal vision recognition
+      const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${GEMINI_API_KEY}`;
       
       const payload = {
         contents: [
           {
             parts: [
               {
-                text: "Analyze this picture of a fridge, pantry, or food ingredients. Identify all visible raw food ingredients (e.g. tomatoes, eggs, milk, chicken, garlic, butter, bell pepper, onions, cheese, spinach, etc.). Return strictly a JSON array of clean lowercase ingredient strings. Example response format: [\"tomato\", \"eggs\", \"garlic\", \"chicken\", \"milk\", \"butter\"]. Do NOT include markdown code blocks or extra text."
+                text: "Analyze this image of a fridge, pantry, or food items. Identify all visible raw food ingredients (e.g. tomato, eggs, garlic, chicken, milk, butter, onion, cheese, spinach, rice, etc.). Return strictly a JSON array of clean lowercase ingredient strings. Example: [\"tomato\", \"eggs\", \"garlic\"]. Do NOT include markdown formatting or extra conversational text."
               },
               {
                 inline_data: {
@@ -408,25 +409,29 @@ app.post('/api/vision/scan-fridge', async (req, res) => {
 
       if (geminiRes.ok) {
         const geminiData = await geminiRes.json();
-        const responseText = geminiData?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+        const parts = geminiData?.candidates?.[0]?.content?.parts || [];
+        const responseText = parts.map(p => p.text || '').filter(Boolean).join('\n');
+        console.log(`[Gemini Vision Output]:`, responseText);
         
-        // Clean markdown backticks if returned
-        const cleanedJson = responseText.replace(/```json/gi, '').replace(/```/g, '').trim();
-        const parsedIngredients = JSON.parse(cleanedJson);
+        // Extract array using regex matching [...]
+        const arrayMatch = responseText.match(/\[[\s\S]*\]/);
+        if (arrayMatch) {
+          const parsedIngredients = JSON.parse(arrayMatch[0]);
 
-        if (Array.isArray(parsedIngredients) && parsedIngredients.length > 0) {
-          console.log(`[Gemini Vision] Successfully detected ${parsedIngredients.length} ingredients:`, parsedIngredients);
-          return res.json({
-            source: 'gemini-vision',
-            ingredients: parsedIngredients.map(i => String(i).toLowerCase().trim())
-          });
+          if (Array.isArray(parsedIngredients)) {
+            console.log(`[Gemini Vision] Successfully detected ${parsedIngredients.length} ingredients:`, parsedIngredients);
+            return res.json({
+              source: 'gemini-vision',
+              ingredients: parsedIngredients.map(i => String(i).toLowerCase().trim())
+            });
+          }
         }
       } else {
         const errText = await geminiRes.text();
-        console.warn(`[Gemini Vision Warning] Status ${geminiRes.status}: ${errText}. Falling back to Smart Vision Simulator.`);
+        console.warn(`[Gemini Vision Warning] Status ${geminiRes.status}: ${errText}`);
       }
     } catch (err) {
-      console.error(`[Gemini Vision Error] ${err.message}. Using Smart Vision Simulator.`);
+      console.error(`[Gemini Vision Error] ${err.message}`);
     }
   }
 
