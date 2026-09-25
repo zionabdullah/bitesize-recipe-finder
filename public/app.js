@@ -1,3 +1,21 @@
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.4.0/firebase-app.js";
+import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.4.0/firebase-auth.js";
+import { getFirestore, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/10.4.0/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyBDObvjFFzMFE8LVFuKAXmgul9t-Cch0Fg",
+  authDomain: "bitesize-recipe-finder.firebaseapp.com",
+  projectId: "bitesize-recipe-finder",
+  storageBucket: "bitesize-recipe-finder.firebasestorage.app",
+  messagingSenderId: "135781162303",
+  appId: "1:135781162303:web:bde3be0b2a1ed59d6e878a",
+  measurementId: "G-WW3ZG678L8"
+};
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+
 /* ===================================================================
    BITESIZE - SMART INGREDIENT RECIPE FINDER & MEAL PLANNER (APP.JS)
    =================================================================== */
@@ -18,7 +36,9 @@ document.addEventListener('DOMContentLoaded', () => {
     detectedIngredients: [],
     cameraStream: null,
     snapMode: 'camera', // 'camera' | 'upload'
-    currentCapturedBase64: null
+    currentCapturedBase64: null,
+    shoppingList: JSON.parse(localStorage.getItem('bitesize_shopping_list') || '[]'),
+    mobileActiveTab: 'fridge'
   };
 
   // -------------------------------------------------------------------
@@ -42,6 +62,23 @@ document.addEventListener('DOMContentLoaded', () => {
   const canvasTitle = document.getElementById('canvas-title');
   const canvasSubtitle = document.getElementById('canvas-subtitle');
   const sortSelect = document.getElementById('sort-select');
+  const navListBtn = document.getElementById('nav-list-btn');
+
+  // Mobile Tabs & Views
+  const mobileTabBtns = document.querySelectorAll('.mobile-tab-btn');
+  const fridgeView = document.getElementById('fridge-view');
+  const recipesView = document.getElementById('recipes-view');
+  const listView = document.getElementById('list-view');
+
+  // Shopping List Modal & Containers
+  const listModalBackdrop = document.getElementById('list-modal-backdrop');
+  const closeListModalBtn = document.getElementById('close-list-modal-btn');
+  const desktopShoppingListContainer = document.getElementById('desktop-shopping-list-container');
+  const desktopListInput = document.getElementById('desktop-list-input');
+  const desktopListAddBtn = document.getElementById('desktop-list-add-btn');
+  const mobileShoppingListContainer = document.getElementById('mobile-shopping-list-container');
+  const mobileListInput = document.getElementById('mobile-list-input');
+  const mobileListAddBtn = document.getElementById('mobile-list-add-btn');
 
   // Virtual Fridge & AI Snap Modal Elements
   const fridgeSnapModal = document.getElementById('fridge-snap-modal');
@@ -106,6 +143,56 @@ document.addEventListener('DOMContentLoaded', () => {
   const filterVegan = document.getElementById('filter-vegan');
   const filterGf = document.getElementById('filter-gf');
   const filterKeto = document.getElementById('filter-keto');
+  const authLogoutBtn = document.getElementById('auth-logout-btn');
+
+  async function syncToFirebase() {
+    if (!state.user || !state.user.uid) return;
+    try {
+      await setDoc(doc(db, "users", state.user.uid), {
+        savedRecipes: state.savedRecipes,
+        shoppingList: state.shoppingList,
+        virtualFridge: state.virtualFridge
+      }, { merge: true });
+    } catch(e) {
+      console.error("Error syncing to Firebase:", e);
+    }
+  }
+
+  onAuthStateChanged(auth, async (user) => {
+    if (user) {
+      state.user = { name: user.email.split('@')[0], email: user.email, uid: user.uid };
+      localStorage.setItem('bitesize_user', JSON.stringify(state.user));
+      if (authLogoutBtn) authLogoutBtn.classList.remove('hidden');
+      if (authModalTrigger) authModalTrigger.classList.add('hidden');
+      
+      try {
+        const docSnap = await getDoc(doc(db, "users", user.uid));
+        if (docSnap.exists()) {
+          const data = docSnap.data();
+          if (data.savedRecipes) state.savedRecipes = data.savedRecipes;
+          if (data.shoppingList) state.shoppingList = data.shoppingList;
+          if (data.virtualFridge) state.virtualFridge = data.virtualFridge;
+          
+          localStorage.setItem('bitesize_saved_recipes', JSON.stringify(state.savedRecipes));
+          localStorage.setItem('bitesize_shopping_list', JSON.stringify(state.shoppingList));
+          localStorage.setItem('bitesize_virtual_fridge', JSON.stringify(state.virtualFridge));
+          
+          updateSavedCountBadge();
+          renderVirtualFridge();
+          renderShoppingList();
+          if (state.activeTab === 'saved') renderSavedRecipesGrid();
+        } else {
+          syncToFirebase();
+        }
+      } catch(e) { console.error(e); }
+    } else {
+      state.user = { name: "Guest User", email: "", uid: null };
+      localStorage.setItem('bitesize_user', JSON.stringify(state.user));
+      if (authLogoutBtn) authLogoutBtn.classList.add('hidden');
+      if (authModalTrigger) authModalTrigger.classList.remove('hidden');
+    }
+    updateUserDisplay();
+  });
 
   // -------------------------------------------------------------------
   // 3. INITIALIZATION & EVEN LISTENERS
@@ -116,6 +203,7 @@ document.addEventListener('DOMContentLoaded', () => {
     renderChips();
     syncPresetTags();
     renderVirtualFridge();
+    renderShoppingList();
     
     // Auto-fetch default initial demo recipe set for rich initial experience
     fetchRecipes();
@@ -172,7 +260,12 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     clearAllChipsBtn.addEventListener('click', clearAllChips);
-    findRecipesBtn.addEventListener('click', () => fetchRecipes());
+    findRecipesBtn.addEventListener('click', () => {
+      fetchRecipes();
+      if (window.innerWidth < 1024) {
+        switchMobileTab('recipes');
+      }
+    });
     resetFiltersBtn.addEventListener('click', resetAllFilters);
 
     // Preset tag clicks
@@ -195,9 +288,31 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     });
 
-    // Navigation Tab Switching
+    // Navigation Tab Switching (Desktop)
     navDiscoverBtn.addEventListener('click', () => switchTab('discover'));
     navSavedBtn.addEventListener('click', () => switchTab('saved'));
+
+    // Desktop Shopping List Listeners
+    if (navListBtn) navListBtn.addEventListener('click', () => listModalBackdrop.classList.remove('hidden'));
+    if (closeListModalBtn) closeListModalBtn.addEventListener('click', () => listModalBackdrop.classList.add('hidden'));
+    if (listModalBackdrop) listModalBackdrop.addEventListener('click', (e) => {
+      if (e.target === listModalBackdrop) listModalBackdrop.classList.add('hidden');
+    });
+
+    // Shopping List Add Item Listeners
+    if (desktopListAddBtn) desktopListAddBtn.addEventListener('click', () => addShoppingListItem(desktopListInput.value, desktopListInput));
+    if (desktopListInput) desktopListInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') addShoppingListItem(desktopListInput.value, desktopListInput);
+    });
+    if (mobileListAddBtn) mobileListAddBtn.addEventListener('click', () => addShoppingListItem(mobileListInput.value, mobileListInput));
+    if (mobileListInput) mobileListInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') addShoppingListItem(mobileListInput.value, mobileListInput);
+    });
+
+    // Mobile Tabs Listeners
+    mobileTabBtns.forEach(btn => {
+      btn.addEventListener('click', () => switchMobileTab(btn.dataset.tab));
+    });
 
     // Sorting Dropdown
     sortSelect.addEventListener('change', () => renderCurrentRecipesGrid());
@@ -213,12 +328,14 @@ document.addEventListener('DOMContentLoaded', () => {
     copyShoppingListBtn.addEventListener('click', copyShoppingListToClipboard);
 
     // Modal Bookmark Toggle
-    modalBookmarkBtn.addEventListener('click', () => {
-      if (state.activeRecipeDetail) {
-        toggleBookmark(state.activeRecipeDetail);
-        updateModalBookmarkBtnState();
-      }
-    });
+    if (modalBookmarkBtn) {
+      modalBookmarkBtn.addEventListener('click', () => {
+        if (state.activeRecipeDetail) {
+          toggleBookmark(state.activeRecipeDetail);
+          updateModalBookmarkBtnState();
+        }
+      });
+    }
 
     // Auth Modal Triggers
     authModalTrigger.addEventListener('click', openAuthModal);
@@ -227,24 +344,167 @@ document.addEventListener('DOMContentLoaded', () => {
       if (e.target === authModalBackdrop) closeAuthModal();
     });
 
-    authForm.addEventListener('submit', (e) => {
+    authForm.addEventListener('submit', async (e) => {
       e.preventDefault();
-      const name = document.getElementById('auth-name-input').value.trim() || 'Chef';
       const email = document.getElementById('auth-email-input').value.trim();
-      state.user = { name, email };
-      localStorage.setItem('bitesize_user', JSON.stringify(state.user));
-      updateUserDisplay();
-      closeAuthModal();
-      showToast(`Welcome back, ${name}! Saved recipes synced.`, 'success');
+      const password = document.getElementById('auth-password-input').value.trim();
+      
+      try {
+        await signInWithEmailAndPassword(auth, email, password);
+        closeAuthModal();
+        showToast('Logged in successfully! 🚀', 'success');
+      } catch (err) {
+        if (err.code === 'auth/invalid-credential' || err.code === 'auth/user-not-found') {
+          try {
+            await createUserWithEmailAndPassword(auth, email, password);
+            closeAuthModal();
+            showToast('Account created & logged in! 🎉', 'success');
+          } catch (signUpErr) {
+            showToast(signUpErr.message, 'error');
+          }
+        } else {
+          showToast(err.message, 'error');
+        }
+      }
     });
+
+    if (authLogoutBtn) {
+      authLogoutBtn.addEventListener('click', () => {
+        signOut(auth);
+        showToast('Logged out.', 'info');
+      });
+    }
 
     // Escape Key Handler for Modals
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') {
         closeModal();
         closeAuthModal();
+        if (listModalBackdrop) listModalBackdrop.classList.add('hidden');
       }
     });
+  }
+
+  // -------------------------------------------------------------------
+  // 3.5. SHOPPING LIST LOGIC
+  // -------------------------------------------------------------------
+  function addShoppingListItem(text, inputEl) {
+    const val = text.trim();
+    if (!val) return;
+    
+    state.shoppingList.push({
+      id: Date.now().toString(),
+      text: val,
+      completed: false
+    });
+    
+    saveShoppingList();
+    renderShoppingList();
+    if (inputEl) inputEl.value = '';
+  }
+
+  function toggleShoppingListItem(id) {
+    const item = state.shoppingList.find(i => i.id === id);
+    if (item) {
+      item.completed = !item.completed;
+      saveShoppingList();
+      renderShoppingList();
+    }
+  }
+
+  function deleteShoppingListItem(id) {
+    state.shoppingList = state.shoppingList.filter(i => i.id !== id);
+    saveShoppingList();
+    renderShoppingList();
+  }
+
+  function saveShoppingList() {
+    localStorage.setItem('bitesize_shopping_list', JSON.stringify(state.shoppingList));
+    syncToFirebase();
+  }
+
+  function renderShoppingList() {
+    const renderTarget = (container) => {
+      if (!container) return;
+      container.innerHTML = '';
+      if (state.shoppingList.length === 0) {
+        container.innerHTML = `
+          <div class="text-center py-10 text-slate-500 text-sm">
+            List is empty. Add ingredients you need!
+          </div>
+        `;
+        return;
+      }
+
+      state.shoppingList.forEach(item => {
+        const div = document.createElement('div');
+        div.className = 'flex items-center justify-between p-3 bg-white border border-slate-200 rounded-xl shadow-sm mb-2';
+        div.innerHTML = `
+          <div class="flex items-center gap-3 flex-1 cursor-pointer" onclick="window.toggleShoppingListItem('${item.id}')">
+            <div class="w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors ${item.completed ? 'bg-emerald-500 border-emerald-500 text-white' : 'border-slate-300'}">
+              ${item.completed ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>' : ''}
+            </div>
+            <span class="text-sm font-medium ${item.completed ? 'list-item-completed' : 'text-slate-800'} transition-all">${item.text}</span>
+          </div>
+          <button onclick="window.deleteShoppingListItem('${item.id}')" class="w-8 h-8 flex items-center justify-center text-slate-400 hover:text-rose-500 transition-colors">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"></path><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+          </button>
+        `;
+        container.appendChild(div);
+      });
+    };
+
+    renderTarget(desktopShoppingListContainer);
+    renderTarget(mobileShoppingListContainer);
+  }
+
+  // Make functions globally accessible for inline onclick
+  window.toggleShoppingListItem = toggleShoppingListItem;
+  window.deleteShoppingListItem = deleteShoppingListItem;
+
+  // -------------------------------------------------------------------
+  // 3.6. MOBILE TAB LOGIC
+  // -------------------------------------------------------------------
+  function switchMobileTab(tabId) {
+    state.mobileActiveTab = tabId;
+    
+    // Update active state of buttons
+    mobileTabBtns.forEach(btn => {
+      if (btn.dataset.tab === tabId) {
+        btn.classList.add('active', 'text-emerald-600');
+        btn.classList.remove('text-slate-400');
+      } else {
+        btn.classList.remove('active', 'text-emerald-600');
+        btn.classList.add('text-slate-400');
+      }
+    });
+
+    // Show/Hide views based on tab
+    if (fridgeView) {
+      if (tabId === 'fridge') {
+        fridgeView.classList.remove('hidden');
+        fridgeView.classList.add('flex');
+      } else {
+        fridgeView.classList.add('hidden');
+        fridgeView.classList.remove('flex');
+      }
+    }
+    
+    if (recipesView) {
+      if (tabId === 'recipes') {
+        recipesView.classList.remove('hidden');
+      } else {
+        recipesView.classList.add('hidden');
+      }
+    }
+    
+    if (listView) {
+      if (tabId === 'list') {
+        listView.classList.remove('hidden');
+      } else {
+        listView.classList.add('hidden');
+      }
+    }
   }
 
   // -------------------------------------------------------------------
@@ -298,7 +558,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (count === 0) {
       activeChipsContainer.innerHTML = `
-        <span id="no-chips-placeholder" class="text-xs text-slate-400 italic">
+        <span id="no-chips-placeholder" class="text-xs text-slate-400 italic text-center mt-4">
           No ingredients added yet. Tap preset options below or type above!
         </span>
       `;
@@ -307,10 +567,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
     state.activeIngredients.forEach(ing => {
       const chip = document.createElement('div');
-      chip.className = 'stitch-chip';
+      chip.className = 'flex items-center justify-between p-3 bg-white border border-slate-200 rounded-xl shadow-sm mb-2';
       chip.innerHTML = `
-        <span>${ing}</span>
-        <button type="button" class="chip-remove-btn" title="Remove ingredient">✕</button>
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-full bg-slate-50 border border-slate-100 flex items-center justify-center text-lg">
+            🥗
+          </div>
+          <div>
+            <div class="text-sm font-bold text-slate-800 capitalize">${ing}</div>
+            <div class="text-[11px] text-slate-400">In Fridge</div>
+          </div>
+        </div>
+        <button type="button" class="chip-remove-btn w-8 h-8 flex items-center justify-center text-slate-400 hover:text-rose-500 transition-colors" title="Remove ingredient">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        </button>
       `;
       chip.querySelector('.chip-remove-btn').addEventListener('click', (e) => {
         e.stopPropagation();
@@ -454,43 +724,35 @@ document.addEventListener('DOMContentLoaded', () => {
   function buildRecipeCardElement(recipe) {
     const isBookmarked = state.savedRecipes.some(r => r.id === recipe.id);
     const card = document.createElement('div');
-    card.className = 'stitch-card-elevated group cursor-pointer';
+    card.className = 'bg-white border border-slate-200 rounded-2xl p-3 flex gap-4 hover:shadow-md transition-shadow cursor-pointer group relative';
 
     const usedCount = recipe.usedIngredientCount || (recipe.usedIngredients ? recipe.usedIngredients.length : 2);
     const missedCount = recipe.missedIngredientCount || (recipe.missedIngredients ? recipe.missedIngredients.length : 1);
     const prepTime = recipe.readyInMinutes || 25;
 
     card.innerHTML = `
-      <div class="stitch-card-image-wrapper">
-        <img src="${recipe.image}" alt="${recipe.title}" loading="lazy">
-        <div class="stitch-card-badge">
-          <span>⏱️</span> ${prepTime}m
-        </div>
-        <button class="bookmark-btn ${isBookmarked ? 'active' : ''}" title="${isBookmarked ? 'Remove from saved' : 'Save recipe'}">
+      <div class="relative w-28 h-28 shrink-0 rounded-xl overflow-hidden">
+        <img src="${recipe.image}" alt="${recipe.title}" loading="lazy" class="w-full h-full object-cover">
+        <button class="absolute top-2 right-2 w-7 h-7 bg-white/90 rounded-full flex items-center justify-center text-xs shadow-sm hover:scale-110 transition-transform bookmark-btn ${isBookmarked ? 'text-rose-500' : 'text-slate-400'}" title="${isBookmarked ? 'Remove from saved' : 'Save recipe'}">
           ${isBookmarked ? '❤️' : '🤍'}
         </button>
       </div>
 
-      <div class="p-4 flex-1 flex flex-col justify-between space-y-3">
-        <div>
-          <div class="flex items-center gap-1.5 mb-1.5 flex-wrap">
-            <span class="text-[11px] font-bold px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded-full">
-              ✓ ${usedCount} Owned
-            </span>
-            <span class="text-[11px] font-bold px-2 py-0.5 bg-orange-100 text-orange-800 rounded-full">
-              + ${missedCount} Missing
-            </span>
-          </div>
+      <div class="flex-1 flex flex-col justify-center">
+        <h3 class="text-sm font-bold text-slate-900 line-clamp-2 leading-tight group-hover:text-emerald-600 transition-colors mb-2">
+          ${recipe.title}
+        </h3>
+        
+        <p class="text-[11px] text-slate-500 line-clamp-2 mb-3">
+          Delicious recipe using ${usedCount} of your ingredients.
+        </p>
 
-          <h3 class="text-sm sm:text-base font-bold text-slate-900 line-clamp-2 group-hover:text-emerald-600 transition-colors leading-snug">
-            ${recipe.title}
-          </h3>
-        </div>
-
-        <div class="pt-2 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
-          <span>🔥 ${recipe.calories || 450} kcal</span>
-          <span class="font-bold text-emerald-600 group-hover:translate-x-1 transition-transform flex items-center gap-1">
-            View Recipe ➔
+        <div class="flex items-center gap-2 mt-auto">
+          <span class="text-[10px] font-semibold px-2.5 py-1 bg-slate-100 text-slate-600 rounded-md">
+            ⏱️ ${prepTime} Mins
+          </span>
+          <span class="text-[10px] font-semibold px-2.5 py-1 bg-slate-100 text-slate-600 rounded-md">
+            🔥 ${recipe.calories || 320} kcal
           </span>
         </div>
       </div>
@@ -580,6 +842,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     localStorage.setItem('bitesize_saved_recipes', JSON.stringify(state.savedRecipes));
+    syncToFirebase();
     updateSavedCountBadge();
 
     if (state.activeTab === 'saved') {
@@ -597,14 +860,14 @@ document.addEventListener('DOMContentLoaded', () => {
   async function openRecipeModal(recipeId, cachedRecipe = null) {
     showToast('Loading full recipe instructions...', 'info');
 
-    let recipe = cachedRecipe;
+    let recipe = cachedRecipe ? { ...cachedRecipe } : null;
 
     try {
       const res = await fetch(`/api/recipes/${recipeId}/information`);
       if (res.ok) {
         const payload = await res.json();
         if (payload.data) {
-          recipe = { ...recipe, ...payload.data };
+          recipe = { ...(recipe || {}), ...payload.data };
         }
       }
     } catch (err) {
@@ -616,91 +879,161 @@ document.addEventListener('DOMContentLoaded', () => {
     state.activeRecipeDetail = recipe;
 
     // Populate Modal Content
-    modalImage.src = recipe.image;
-    modalTitle.textContent = recipe.title;
-    modalPrepBadge.textContent = `⏱️ ${recipe.readyInMinutes || 25} mins`;
-    modalServingsBadge.textContent = `👥 ${recipe.servings || 4} Servings`;
+    if (modalImage) modalImage.src = recipe.image || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c';
+    if (modalTitle) modalTitle.textContent = recipe.title || 'Delicious Recipe';
+    if (modalPrepBadge) modalPrepBadge.textContent = `⏱️ ${recipe.readyInMinutes || 25} mins`;
+    if (modalServingsBadge) modalServingsBadge.textContent = `👥 ${recipe.servings || 4} Servings`;
 
     // Populate Dietary Badges
-    modalDietaryContainer.innerHTML = '';
-    const dietaryList = recipe.dietary || ['Healthy Choice'];
-    dietaryList.forEach(d => {
-      const badge = document.createElement('span');
-      badge.className = 'px-2 py-0.5 bg-orange-500/80 text-white text-[10px] font-bold rounded-full backdrop-blur-sm';
-      badge.textContent = d;
-      modalDietaryContainer.appendChild(badge);
-    });
+    if (modalDietaryContainer) {
+      modalDietaryContainer.innerHTML = '';
+      let dietaryList = Array.isArray(recipe.dietary) ? [...recipe.dietary] : [];
+      if (dietaryList.length === 0 && Array.isArray(recipe.diets)) {
+        dietaryList = recipe.diets.map(d => d.charAt(0).toUpperCase() + d.slice(1));
+      }
+      if (dietaryList.length === 0) {
+        if (recipe.vegetarian) dietaryList.push('Vegetarian');
+        if (recipe.vegan) dietaryList.push('Vegan');
+        if (recipe.glutenFree) dietaryList.push('Gluten-Free');
+        if (recipe.veryHealthy) dietaryList.push('Healthy');
+      }
+      if (dietaryList.length === 0) dietaryList = ['Healthy Choice'];
 
-    // Populate Macros
-    modalMacroCalories.textContent = `${recipe.calories || 520} kcal`;
-    modalMacroProtein.textContent = recipe.protein || '32g';
-    modalMacroCarbs.textContent = recipe.carbs || '45g';
-    modalMacroFat.textContent = recipe.fat || '18g';
-
-    // Populate Ingredients List (Highlighting owned vs missing)
-    modalIngredientsList.innerHTML = '';
-    const allIngredients = [
-      ...(recipe.usedIngredients || []),
-      ...(recipe.missedIngredients || [])
-    ];
-
-    if (allIngredients.length === 0) {
-      modalIngredientsList.innerHTML = '<p class="text-xs text-slate-400">Ingredients list unavailable.</p>';
-    } else {
-      allIngredients.forEach(item => {
-        const nameClean = item.name ? item.name.toLowerCase() : '';
-        const isOwned = state.activeIngredients.some(ing => nameClean.includes(ing) || ing.includes(nameClean));
-
-        const itemEl = document.createElement('div');
-        itemEl.className = `p-2.5 rounded-xl border flex items-center justify-between text-xs font-medium ${
-          isOwned 
-            ? 'bg-emerald-50/80 border-emerald-200 text-emerald-950' 
-            : 'bg-orange-50/80 border-orange-200 text-orange-950'
-        }`;
-
-        itemEl.innerHTML = `
-          <div class="flex items-center gap-2">
-            <span class="w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${
-              isOwned ? 'bg-emerald-600 text-white' : 'bg-orange-500 text-white'
-            }">
-              ${isOwned ? '✓' : '!'}
-            </span>
-            <span>${item.original || item.name}</span>
-          </div>
-          <span class="text-[10px] font-bold uppercase tracking-wider ${isOwned ? 'text-emerald-700' : 'text-orange-700'}">
-            ${isOwned ? 'In Pantry' : 'To Buy'}
-          </span>
-        `;
-        modalIngredientsList.appendChild(itemEl);
+      dietaryList.forEach(d => {
+        const badge = document.createElement('span');
+        badge.className = 'px-2 py-0.5 bg-orange-500/80 text-white text-[10px] font-bold rounded-full backdrop-blur-sm';
+        badge.textContent = d;
+        modalDietaryContainer.appendChild(badge);
       });
     }
 
-    // Populate Numbered Step-by-Step Instructions
-    modalInstructionsList.innerHTML = '';
-    const steps = recipe.instructions || [
-      'Prepare all ingredients by washing and chopping vegetables.',
-      'Heat oil in a large skillet over medium-high heat.',
-      'Add main ingredients and cook until golden brown and cooked through.',
-      'Season with salt, pepper, and herbs before serving hot.'
-    ];
+    // Populate Macros
+    let calories = recipe.calories;
+    let protein = recipe.protein;
+    let carbs = recipe.carbs;
+    let fat = recipe.fat;
 
-    steps.forEach((step, idx) => {
-      const li = document.createElement('li');
-      li.className = 'flex items-start gap-3 bg-slate-50 p-3 rounded-xl border border-slate-100';
-      li.innerHTML = `
-        <span class="w-6 h-6 rounded-full bg-emerald-600 text-white flex-shrink-0 flex items-center justify-center font-bold text-xs">
-          ${idx + 1}
-        </span>
-        <p class="pt-0.5 leading-relaxed">${step}</p>
-      `;
-      modalInstructionsList.appendChild(li);
-    });
+    if (recipe.nutrition && Array.isArray(recipe.nutrition.nutrients)) {
+      const c = recipe.nutrition.nutrients.find(n => n.name === 'Calories');
+      const p = recipe.nutrition.nutrients.find(n => n.name === 'Protein');
+      const cb = recipe.nutrition.nutrients.find(n => n.name === 'Carbohydrates');
+      const f = recipe.nutrition.nutrients.find(n => n.name === 'Fat');
+      if (c && !calories) calories = Math.round(c.amount) + ' kcal';
+      if (p && !protein) protein = Math.round(p.amount) + 'g';
+      if (cb && !carbs) carbs = Math.round(cb.amount) + 'g';
+      if (f && !fat) fat = Math.round(f.amount) + 'g';
+    }
+
+    if (modalMacroCalories) modalMacroCalories.textContent = calories ? (String(calories).includes('kcal') ? calories : `${calories} kcal`) : '480 kcal';
+    if (modalMacroProtein) modalMacroProtein.textContent = protein || '28g';
+    if (modalMacroCarbs) modalMacroCarbs.textContent = carbs || '42g';
+    if (modalMacroFat) modalMacroFat.textContent = fat || '16g';
+
+    // Populate Ingredients List (Highlighting owned vs missing)
+    if (modalIngredientsList) {
+      modalIngredientsList.innerHTML = '';
+      let allIngredients = [];
+      if ((recipe.usedIngredients && recipe.usedIngredients.length > 0) || (recipe.missedIngredients && recipe.missedIngredients.length > 0)) {
+        allIngredients = [
+          ...(recipe.usedIngredients || []),
+          ...(recipe.missedIngredients || [])
+        ];
+      } else if (recipe.extendedIngredients && recipe.extendedIngredients.length > 0) {
+        allIngredients = recipe.extendedIngredients;
+      }
+
+      if (allIngredients.length === 0) {
+        modalIngredientsList.innerHTML = '<p class="text-xs text-slate-400">Ingredients list unavailable.</p>';
+      } else {
+        allIngredients.forEach(item => {
+          const nameClean = item.name ? item.name.toLowerCase() : '';
+          const isOwned = state.activeIngredients.some(ing => nameClean.includes(ing) || ing.includes(nameClean));
+
+          const itemEl = document.createElement('div');
+          itemEl.className = `p-2.5 rounded-xl border flex items-center justify-between text-xs font-medium ${
+            isOwned 
+              ? 'bg-emerald-50/80 border-emerald-200 text-emerald-950' 
+              : 'bg-orange-50/80 border-orange-200 text-orange-950'
+          }`;
+
+          itemEl.innerHTML = `
+            <div class="flex items-center gap-2">
+              <span class="w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${
+                isOwned ? 'bg-emerald-600 text-white' : 'bg-orange-500 text-white'
+              }">
+                ${isOwned ? '✓' : '!'}
+              </span>
+              <span>${item.original || item.name}</span>
+            </div>
+            <span class="text-[10px] font-bold uppercase tracking-wider ${isOwned ? 'text-emerald-700' : 'text-orange-700'}">
+              ${isOwned ? 'In Pantry' : 'To Buy'}
+            </span>
+          `;
+          modalIngredientsList.appendChild(itemEl);
+        });
+      }
+    }
+
+    // Populate Numbered Step-by-Step Instructions
+    if (modalInstructionsList) {
+      modalInstructionsList.innerHTML = '';
+      let steps = [];
+
+      if (Array.isArray(recipe.instructions)) {
+        steps = recipe.instructions;
+      } else if (recipe.analyzedInstructions && Array.isArray(recipe.analyzedInstructions) && recipe.analyzedInstructions.length > 0) {
+        recipe.analyzedInstructions.forEach(group => {
+          if (Array.isArray(group.steps)) {
+            group.steps.forEach(s => {
+              if (s && s.step) steps.push(s.step.trim());
+            });
+          }
+        });
+      } else if (typeof recipe.instructions === 'string' && recipe.instructions.trim().length > 0) {
+        const cleanText = recipe.instructions
+          .replace(/<li[^>]*>/gi, '\n')
+          .replace(/<\/li>/gi, '')
+          .replace(/<[^>]*>/g, '')
+          .replace(/&nbsp;/g, ' ')
+          .replace(/&amp;/g, '&');
+        
+        const splitSteps = cleanText.split('\n').map(s => s.trim()).filter(s => s.length > 0);
+        if (splitSteps.length > 1) {
+          steps = splitSteps;
+        } else {
+          steps = [cleanText];
+        }
+      }
+
+      if (!steps || steps.length === 0) {
+        steps = [
+          'Prepare all ingredients by washing and chopping vegetables.',
+          'Heat oil in a large skillet over medium-high heat.',
+          'Add main ingredients and cook until golden brown and cooked through.',
+          'Season with salt, pepper, and herbs before serving hot.'
+        ];
+      }
+
+      steps.forEach((step, idx) => {
+        const li = document.createElement('li');
+        li.className = 'flex items-start gap-3 bg-slate-50 p-3 rounded-xl border border-slate-100';
+        li.innerHTML = `
+          <span class="w-6 h-6 rounded-full bg-emerald-600 text-white flex-shrink-0 flex items-center justify-center font-bold text-xs">
+            ${idx + 1}
+          </span>
+          <p class="pt-0.5 leading-relaxed">${step}</p>
+        `;
+        modalInstructionsList.appendChild(li);
+      });
+    }
 
     updateModalBookmarkBtnState();
 
     // Show Dialog
-    modalBackdrop.classList.add('open');
-    document.body.style.overflow = 'hidden';
+    if (modalBackdrop) {
+      modalBackdrop.classList.add('open');
+      document.body.style.overflow = 'hidden';
+    }
   }
 
   function closeModal() {
@@ -711,7 +1044,9 @@ document.addEventListener('DOMContentLoaded', () => {
   function updateModalBookmarkBtnState() {
     if (!state.activeRecipeDetail) return;
     const isSaved = state.savedRecipes.some(r => r.id === state.activeRecipeDetail.id);
-    modalBookmarkText.textContent = isSaved ? 'Saved to Favorites ❤️' : 'Save to Favorites';
+    if (modalBookmarkText) {
+      modalBookmarkText.textContent = isSaved ? 'Saved to Favorites ❤️' : 'Save to Favorites';
+    }
   }
 
   function copyShoppingListToClipboard() {
@@ -802,6 +1137,33 @@ document.addEventListener('DOMContentLoaded', () => {
     fetchRecipes();
   }
 
+  function showToast(message, type = 'info') {
+    let container = document.getElementById('toast-container');
+    if (!container) {
+      container = document.createElement('div');
+      container.id = 'toast-container';
+      container.className = 'toast-container';
+      document.body.appendChild(container);
+    }
+
+    const toast = document.createElement('div');
+    toast.className = 'toast';
+
+    let icon = 'ℹ️';
+    if (type === 'success') icon = '✅';
+    if (type === 'error') icon = '❌';
+
+    toast.innerHTML = `<span>${icon}</span><span>${message}</span>`;
+    container.appendChild(toast);
+
+    setTimeout(() => {
+      toast.style.opacity = '0';
+      toast.style.transform = 'translateY(10px)';
+      toast.style.transition = 'all 300ms ease';
+      setTimeout(() => toast.remove(), 300);
+    }, 3000);
+  }
+
   // -------------------------------------------------------------------
   // 12. AI VISION FRIDGE SCANNER & VIRTUAL FRIDGE MANAGER
   // -------------------------------------------------------------------
@@ -849,6 +1211,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Save to LocalStorage
     localStorage.setItem('bitesize_virtual_fridge', JSON.stringify(state.virtualFridge));
+    syncToFirebase();
   }
 
   function addVirtualFridgeItem(itemStr) {
