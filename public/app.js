@@ -1,6 +1,6 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.4.0/firebase-app.js";
-import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.4.0/firebase-auth.js";
-import { getFirestore, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/10.4.0/firebase-firestore.js";
+import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged, updatePassword, sendPasswordResetEmail, sendEmailVerification, deleteUser, GoogleAuthProvider, signInWithPopup, EmailAuthProvider, reauthenticateWithCredential, reauthenticateWithPopup } from "https://www.gstatic.com/firebasejs/10.4.0/firebase-auth.js";
+import { getFirestore, doc, setDoc, getDoc, deleteDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.4.0/firebase-firestore.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyBDObvjFFzMFE8LVFuKAXmgul9t-Cch0Fg",
@@ -137,6 +137,42 @@ document.addEventListener('DOMContentLoaded', () => {
   const authForm = document.getElementById('auth-form');
   const userDisplayName = document.getElementById('user-display-name');
   const toastContainer = document.getElementById('toast-container');
+  const authToggleModeBtn = document.getElementById('auth-toggle-mode-btn');
+  const authNameGroup = document.getElementById('auth-name-group');
+  const authSubmitBtn = document.getElementById('auth-submit-btn');
+  const authTitle = document.getElementById('auth-modal-title');
+  const authSubtitle = document.getElementById('auth-modal-subtitle');
+  const authNameInput = document.getElementById('auth-name-input');
+  const authErrorMessage = document.getElementById('auth-error-message');
+  const authForgotPasswordContainer = document.getElementById('auth-forgot-password-container');
+  const authForgotPasswordBtn = document.getElementById('auth-forgot-password-btn');
+  const authGoogleBtn = document.getElementById('auth-google-btn');
+  let authMode = 'signin';
+
+  // Profile Modal
+  const profileModalBackdrop = document.getElementById('profile-modal-backdrop');
+  const closeProfileModalBtn = document.getElementById('close-profile-modal-btn');
+  const profileForm = document.getElementById('profile-form');
+  const profileNameInput = document.getElementById('profile-name-input');
+  const profilePasswordInput = document.getElementById('profile-password-input');
+  const profileCurrentPasswordInput = document.getElementById('profile-current-password-input');
+  const profileCurrentPasswordContainer = document.getElementById('profile-current-password-container');
+  const profileErrorMessage = document.getElementById('profile-error-message');
+  const profileSuccessMessage = document.getElementById('profile-success-message');
+  const profileLogoutBtn = document.getElementById('profile-logout-btn');
+  const headerAvatarLetter = document.getElementById('header-avatar-letter');
+  const profileAvatarLetter = document.getElementById('profile-avatar-letter');
+  const profileModalName = document.getElementById('profile-modal-name');
+  const profileModalEmail = document.getElementById('profile-modal-email');
+  const profileVerificationBanner = document.getElementById('profile-verification-banner');
+  const profileResendVerificationBtn = document.getElementById('profile-resend-verification-btn');
+  const profileDeleteBtn = document.getElementById('profile-delete-btn');
+  const deleteConfirmPanel = document.getElementById('delete-confirm-panel');
+  const deleteConfirmPassword = document.getElementById('delete-confirm-password');
+  const deletePasswordWrapper = document.getElementById('delete-password-wrapper');
+  const deleteErrorMsg = document.getElementById('delete-error-msg');
+  const deleteCancelBtn = document.getElementById('delete-cancel-btn');
+  const deleteConfirmBtn = document.getElementById('delete-confirm-btn');
 
   // Dietary Checkboxes
   const filterVeg = document.getElementById('filter-veg');
@@ -160,15 +196,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
   onAuthStateChanged(auth, async (user) => {
     if (user) {
-      state.user = { name: user.email.split('@')[0], email: user.email, uid: user.uid };
+      state.user = { name: user.displayName || user.email.split('@')[0], email: user.email, uid: user.uid };
       localStorage.setItem('bitesize_user', JSON.stringify(state.user));
-      if (authLogoutBtn) authLogoutBtn.classList.remove('hidden');
-      if (authModalTrigger) authModalTrigger.classList.add('hidden');
       
-      try {
-        const docSnap = await getDoc(doc(db, "users", user.uid));
+      if (window.unsubFirestore) window.unsubFirestore();
+      
+      window.unsubFirestore = onSnapshot(doc(db, "users", user.uid), (docSnap) => {
         if (docSnap.exists()) {
           const data = docSnap.data();
+          if (data.name) {
+            state.user.name = data.name;
+            localStorage.setItem('bitesize_user', JSON.stringify(state.user));
+            updateUserDisplay();
+          }
           if (data.savedRecipes) state.savedRecipes = data.savedRecipes;
           if (data.shoppingList) state.shoppingList = data.shoppingList;
           if (data.virtualFridge) state.virtualFridge = data.virtualFridge;
@@ -181,15 +221,27 @@ document.addEventListener('DOMContentLoaded', () => {
           renderVirtualFridge();
           renderShoppingList();
           if (state.activeTab === 'saved') renderSavedRecipesGrid();
+          else renderCurrentRecipesGrid();
         } else {
           syncToFirebase();
         }
-      } catch(e) { console.error(e); }
+      }, (e) => console.error("Firestore sync error:", e));
     } else {
       state.user = { name: "Guest User", email: "", uid: null };
       localStorage.setItem('bitesize_user', JSON.stringify(state.user));
-      if (authLogoutBtn) authLogoutBtn.classList.add('hidden');
-      if (authModalTrigger) authModalTrigger.classList.remove('hidden');
+      
+      state.savedRecipes = [];
+      state.shoppingList = [];
+      state.virtualFridge = [];
+      localStorage.setItem('bitesize_saved_recipes', JSON.stringify([]));
+      localStorage.setItem('bitesize_shopping_list', JSON.stringify([]));
+      localStorage.setItem('bitesize_virtual_fridge', JSON.stringify([]));
+      
+      updateSavedCountBadge();
+      renderVirtualFridge();
+      renderShoppingList();
+      if (state.activeTab === 'saved') renderSavedRecipesGrid();
+      else renderCurrentRecipesGrid();
     }
     updateUserDisplay();
   });
@@ -337,41 +389,323 @@ document.addEventListener('DOMContentLoaded', () => {
       });
     }
 
-    // Auth Modal Triggers
-    authModalTrigger.addEventListener('click', openAuthModal);
+    // Auth / Profile Modal Triggers
+    authModalTrigger.addEventListener('click', () => {
+      if (state.user && state.user.uid) openProfileModal();
+      else openAuthModal();
+    });
     closeAuthModalBtn.addEventListener('click', closeAuthModal);
     authModalBackdrop.addEventListener('click', (e) => {
       if (e.target === authModalBackdrop) closeAuthModal();
     });
+    
+    if (closeProfileModalBtn) closeProfileModalBtn.addEventListener('click', closeProfileModal);
+    if (profileModalBackdrop) profileModalBackdrop.addEventListener('click', (e) => {
+      if (e.target === profileModalBackdrop) closeProfileModal();
+    });
+
+    if (authToggleModeBtn) {
+      authToggleModeBtn.addEventListener('click', () => {
+        authErrorMessage.classList.add('hidden');
+        authMode = authMode === 'signin' ? 'signup' : 'signin';
+        if (authMode === 'signup') {
+          authTitle.textContent = 'Create an Account';
+          authSubtitle.textContent = 'Join BiteSize to save your favorite recipes & smart fridge items.';
+          authNameGroup.classList.remove('hidden');
+          authNameInput.required = true;
+          authSubmitBtn.textContent = 'Sign Up';
+          authToggleModeBtn.textContent = 'Already have an account? Sign in';
+          if (authForgotPasswordContainer) authForgotPasswordContainer.classList.add('hidden');
+        } else {
+          authTitle.textContent = 'Welcome Back';
+          authSubtitle.textContent = 'Sign in to sync your saved recipes across all your devices.';
+          authNameGroup.classList.add('hidden');
+          authNameInput.required = false;
+          authSubmitBtn.textContent = 'Sign In';
+          authToggleModeBtn.textContent = "Don't have an account? Sign up";
+          if (authForgotPasswordContainer) authForgotPasswordContainer.classList.remove('hidden');
+        }
+      });
+    }
+
+    if (authForgotPasswordBtn) {
+      authForgotPasswordBtn.addEventListener('click', async () => {
+        const email = document.getElementById('auth-email-input').value.trim();
+        if (!email) {
+          authErrorMessage.textContent = "Please enter your email address first.";
+          authErrorMessage.classList.remove('hidden');
+          return;
+        }
+        try {
+          await sendPasswordResetEmail(auth, email);
+          authErrorMessage.classList.add('hidden');
+          showToast('Password reset email sent!', 'success');
+        } catch (err) {
+          authErrorMessage.textContent = err.message.replace('Firebase:', '').trim();
+          authErrorMessage.classList.remove('hidden');
+        }
+      });
+    }
+
+    if (authGoogleBtn) {
+      authGoogleBtn.addEventListener('click', async () => {
+        authErrorMessage.classList.add('hidden');
+        try {
+          const provider = new GoogleAuthProvider();
+          const result = await signInWithPopup(auth, provider);
+          const user = result.user;
+          
+          const docRef = doc(db, "users", user.uid);
+          const docSnap = await getDoc(docRef);
+          if (!docSnap.exists()) {
+            await setDoc(docRef, {
+              name: user.displayName || user.email.split('@')[0],
+              savedRecipes: state.savedRecipes,
+              shoppingList: state.shoppingList,
+              virtualFridge: state.virtualFridge
+            });
+          }
+          
+          closeAuthModal();
+          showToast('Logged in with Google! 🚀', 'success');
+          setTimeout(() => window.location.reload(), 800);
+        } catch (err) {
+          authErrorMessage.textContent = err.message.replace('Firebase:', '').trim();
+          authErrorMessage.classList.remove('hidden');
+        }
+      });
+    }
 
     authForm.addEventListener('submit', async (e) => {
       e.preventDefault();
+      authErrorMessage.classList.add('hidden');
       const email = document.getElementById('auth-email-input').value.trim();
       const password = document.getElementById('auth-password-input').value.trim();
+      const name = authNameInput.value.trim() || 'Chef';
       
       try {
-        await signInWithEmailAndPassword(auth, email, password);
-        closeAuthModal();
-        showToast('Logged in successfully! 🚀', 'success');
-      } catch (err) {
-        if (err.code === 'auth/invalid-credential' || err.code === 'auth/user-not-found') {
-          try {
-            await createUserWithEmailAndPassword(auth, email, password);
-            closeAuthModal();
-            showToast('Account created & logged in! 🎉', 'success');
-          } catch (signUpErr) {
-            showToast(signUpErr.message, 'error');
-          }
+        if (authMode === 'signin') {
+          await signInWithEmailAndPassword(auth, email, password);
+          showToast('Logged in successfully! 🚀', 'success');
         } else {
-          showToast(err.message, 'error');
+          const userCred = await createUserWithEmailAndPassword(auth, email, password);
+          await setDoc(doc(db, "users", userCred.user.uid), {
+            name: name,
+            savedRecipes: state.savedRecipes,
+            shoppingList: state.shoppingList,
+            virtualFridge: state.virtualFridge
+          }, { merge: true });
+          await sendEmailVerification(userCred.user);
+          showToast('Account created! Please check your email to verify.', 'success');
         }
+        closeAuthModal();
+        setTimeout(() => window.location.reload(), 1500);
+      } catch (err) {
+        let errorMsg = "An error occurred. Please try again.";
+        switch (err.code) {
+          case 'auth/invalid-login-credentials':
+          case 'auth/invalid-credential':
+          case 'auth/wrong-password':
+          case 'auth/user-not-found':
+            errorMsg = "Incorrect email or password. Please try again.";
+            break;
+          case 'auth/email-already-in-use':
+            errorMsg = "This email is already registered. Please sign in instead.";
+            break;
+          case 'auth/weak-password':
+            errorMsg = "Password should be at least 6 characters.";
+            break;
+          case 'auth/invalid-email':
+            errorMsg = "Please enter a valid email address.";
+            break;
+          case 'auth/network-request-failed':
+            errorMsg = "Network error. Please check your internet connection.";
+            break;
+          case 'auth/too-many-requests':
+            errorMsg = "Too many failed attempts. Please try again later.";
+            break;
+          default:
+            errorMsg = err.message.replace('Firebase:', '').trim();
+        }
+        authErrorMessage.textContent = errorMsg;
+        authErrorMessage.classList.remove('hidden');
       }
     });
 
-    if (authLogoutBtn) {
-      authLogoutBtn.addEventListener('click', () => {
-        signOut(auth);
+    if (profileLogoutBtn) {
+      profileLogoutBtn.addEventListener('click', async () => {
+        await signOut(auth);
+        closeProfileModal();
         showToast('Logged out.', 'info');
+        setTimeout(() => window.location.reload(), 800);
+      });
+    }
+
+    if (profileResendVerificationBtn) {
+      profileResendVerificationBtn.addEventListener('click', async () => {
+        if (auth.currentUser) {
+          try {
+            await sendEmailVerification(auth.currentUser);
+            showToast('Verification email resent!', 'success');
+          } catch (e) {
+            showToast(e.message.replace('Firebase:', '').trim(), 'error');
+          }
+        }
+      });
+    }
+
+    async function reauthenticateUser() {
+      const user = auth.currentUser;
+      if (!user) throw new Error("No authenticated user.");
+      const isGoogle = user.providerData.some(p => p.providerId === 'google.com');
+      if (isGoogle) {
+        const provider = new GoogleAuthProvider();
+        await reauthenticateWithPopup(user, provider);
+      } else {
+        const currentPassword = profileCurrentPasswordInput ? profileCurrentPasswordInput.value : '';
+        if (!currentPassword) throw new Error("auth/missing-current-password");
+        const credential = EmailAuthProvider.credential(user.email, currentPassword);
+        await reauthenticateWithCredential(user, credential);
+      }
+    }
+
+    // Helper: show inline delete error
+    function showDeleteError(msg) {
+      if (!deleteErrorMsg) return;
+      deleteErrorMsg.textContent = msg;
+      deleteErrorMsg.classList.remove('hidden');
+    }
+    function hideDeleteError() {
+      if (!deleteErrorMsg) return;
+      deleteErrorMsg.textContent = '';
+      deleteErrorMsg.classList.add('hidden');
+    }
+
+    // Helper: reset & close the inline delete panel
+    function closeDeletePanel() {
+      if (deleteConfirmPanel) deleteConfirmPanel.classList.add('hidden');
+      if (deleteConfirmPassword) deleteConfirmPassword.value = '';
+      hideDeleteError();
+    }
+
+    // Step 1 – "Delete Account Permanently" button → open inline panel
+    if (profileDeleteBtn) {
+      profileDeleteBtn.addEventListener('click', () => {
+        if (!deleteConfirmPanel) return;
+        const isGoogle = auth.currentUser?.providerData.some(p => p.providerId === 'google.com');
+        // Google users don't need a password
+        if (deletePasswordWrapper) {
+          deletePasswordWrapper.classList.toggle('hidden', !!isGoogle);
+        }
+        hideDeleteError();
+        deleteConfirmPanel.classList.remove('hidden');
+        if (!isGoogle && deleteConfirmPassword) deleteConfirmPassword.focus();
+      });
+    }
+
+    // Cancel button → collapse panel
+    if (deleteCancelBtn) {
+      deleteCancelBtn.addEventListener('click', closeDeletePanel);
+    }
+
+    // Step 2 – "Yes, Delete My Account" button → perform deletion
+    if (deleteConfirmBtn) {
+      deleteConfirmBtn.addEventListener('click', async () => {
+        hideDeleteError();
+        const user = auth.currentUser;
+        if (!user) return;
+
+        // For email/password users, use the dedicated delete panel password field
+        const isGoogle = user.providerData.some(p => p.providerId === 'google.com');
+        if (!isGoogle) {
+          const pwd = deleteConfirmPassword ? deleteConfirmPassword.value.trim() : '';
+          if (!pwd) {
+            showDeleteError('Please enter your password to confirm deletion.');
+            if (deleteConfirmPassword) deleteConfirmPassword.focus();
+            return;
+          }
+        }
+
+        deleteConfirmBtn.disabled = true;
+        deleteConfirmBtn.textContent = 'Deleting…';
+
+        try {
+          if (isGoogle) {
+            const provider = new GoogleAuthProvider();
+            await reauthenticateWithPopup(user, provider);
+          } else {
+            const pwd = deleteConfirmPassword.value.trim();
+            const credential = EmailAuthProvider.credential(user.email, pwd);
+            await reauthenticateWithCredential(user, credential);
+          }
+
+          await deleteDoc(doc(db, "users", user.uid));
+          await deleteUser(user);
+          closeDeletePanel();
+          closeProfileModal();
+          showToast('Account deleted successfully.', 'info');
+          setTimeout(() => window.location.reload(), 1000);
+        } catch (e) {
+          deleteConfirmBtn.disabled = false;
+          deleteConfirmBtn.textContent = 'Yes, Delete My Account';
+          if (e.code === 'auth/invalid-credential' || e.code === 'auth/wrong-password') {
+            showDeleteError('Incorrect password. Please try again.');
+          } else if (e.code === 'auth/requires-recent-login') {
+            showDeleteError('Session expired. Please log out and log back in.');
+          } else if (e.code === 'auth/popup-closed-by-user') {
+            showDeleteError('Google sign-in was cancelled. Please try again.');
+          } else {
+            showDeleteError((e.message || e.toString()).replace('Firebase:', '').trim());
+          }
+        }
+      });
+    }
+
+    if (profileForm) {
+      profileForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        profileErrorMessage.classList.add('hidden');
+        profileSuccessMessage.classList.add('hidden');
+        
+        const newName = profileNameInput.value.trim();
+        const newPassword = profilePasswordInput.value;
+        const currentPassword = profileCurrentPasswordInput ? profileCurrentPasswordInput.value : '';
+        const isGoogle = auth.currentUser.providerData.some(p => p.providerId === 'google.com');
+        
+        try {
+          if (newName !== state.user.name || newPassword) {
+            if (!isGoogle && !currentPassword) {
+              throw { message: "auth/missing-current-password" };
+            }
+            await reauthenticateUser();
+          }
+
+          if (newName !== state.user.name) {
+            await setDoc(doc(db, "users", state.user.uid), { name: newName }, { merge: true });
+            state.user.name = newName;
+            localStorage.setItem('bitesize_user', JSON.stringify(state.user));
+            updateUserDisplay();
+          }
+          if (newPassword) {
+            await updatePassword(auth.currentUser, newPassword);
+          }
+          profileSuccessMessage.textContent = "Profile updated successfully!";
+          profileSuccessMessage.classList.remove('hidden');
+          profilePasswordInput.value = '';
+          if (profileCurrentPasswordInput) profileCurrentPasswordInput.value = '';
+          setTimeout(() => closeProfileModal(), 1500);
+        } catch (err) {
+          if (err.message === 'auth/missing-current-password') {
+            profileErrorMessage.textContent = "Please enter your current password to save changes.";
+          } else if (err.code === 'auth/invalid-credential' || err.code === 'auth/wrong-password') {
+            profileErrorMessage.textContent = "Incorrect current password.";
+          } else if (err.code === 'auth/requires-recent-login') {
+            profileErrorMessage.textContent = "Please log out and log back in to change your profile.";
+          } else {
+            profileErrorMessage.textContent = (err.message || err.toString()).replace('Firebase:', '').trim();
+          }
+          profileErrorMessage.classList.remove('hidden');
+        }
       });
     }
 
@@ -380,6 +714,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (e.key === 'Escape') {
         closeModal();
         closeAuthModal();
+        closeProfileModal();
         if (listModalBackdrop) listModalBackdrop.classList.add('hidden');
       }
     });
@@ -1072,6 +1407,7 @@ document.addEventListener('DOMContentLoaded', () => {
   function openAuthModal() {
     document.getElementById('auth-name-input').value = state.user.name || 'Guest User';
     document.getElementById('auth-email-input').value = state.user.email || '';
+    if (authErrorMessage) authErrorMessage.classList.add('hidden');
     authModalBackdrop.classList.add('open');
   }
 
@@ -1079,8 +1415,58 @@ document.addEventListener('DOMContentLoaded', () => {
     authModalBackdrop.classList.remove('open');
   }
 
+  function openProfileModal() {
+    if (profileNameInput) profileNameInput.value = state.user.name;
+    if (profilePasswordInput) profilePasswordInput.value = '';
+    if (profileCurrentPasswordInput) profileCurrentPasswordInput.value = '';
+    if (profileModalName) profileModalName.textContent = state.user.name;
+    if (profileModalEmail) profileModalEmail.textContent = state.user.email;
+    if (profileAvatarLetter) profileAvatarLetter.textContent = state.user.name ? state.user.name.charAt(0).toUpperCase() : '👤';
+    if (profileErrorMessage) profileErrorMessage.classList.add('hidden');
+    if (profileSuccessMessage) profileSuccessMessage.classList.add('hidden');
+    
+    if (profileVerificationBanner && auth.currentUser) {
+      if (!auth.currentUser.emailVerified) {
+        profileVerificationBanner.classList.remove('hidden');
+      } else {
+        profileVerificationBanner.classList.add('hidden');
+      }
+      
+      const isGoogle = auth.currentUser.providerData.some(p => p.providerId === 'google.com');
+      if (profileCurrentPasswordContainer) {
+        if (isGoogle) {
+          profileCurrentPasswordContainer.classList.add('hidden');
+        } else {
+          profileCurrentPasswordContainer.classList.remove('hidden');
+        }
+      }
+    }
+    
+    if (profileModalBackdrop) profileModalBackdrop.classList.add('open');
+  }
+
+  function closeProfileModal() {
+    if (profileModalBackdrop) profileModalBackdrop.classList.remove('open');
+    // Always reset the delete confirmation panel when closing the modal
+    if (deleteConfirmPanel) deleteConfirmPanel.classList.add('hidden');
+    if (deleteConfirmPassword) deleteConfirmPassword.value = '';
+    if (deleteErrorMsg) { deleteErrorMsg.textContent = ''; deleteErrorMsg.classList.add('hidden'); }
+  }
+
   function updateUserDisplay() {
-    userDisplayName.textContent = state.user.name || 'Guest User';
+    if (state.user && state.user.uid) {
+      userDisplayName.textContent = state.user.name;
+      if (headerAvatarLetter) {
+        headerAvatarLetter.textContent = state.user.name.charAt(0).toUpperCase();
+        headerAvatarLetter.className = "w-6 h-6 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold text-xs";
+      }
+    } else {
+      userDisplayName.textContent = 'Sign In';
+      if (headerAvatarLetter) {
+        headerAvatarLetter.textContent = '👤';
+        headerAvatarLetter.className = "w-6 h-6 rounded-full bg-slate-100 text-slate-600 flex items-center justify-center font-bold text-xs";
+      }
+    }
   }
 
   // -------------------------------------------------------------------

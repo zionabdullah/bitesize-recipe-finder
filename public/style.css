@@ -421,3 +421,13 @@ body {
   color: #FFFFFF;
 }
 
+/* Mobile Safe Area */
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* Shopping List Styles */
+.list-item-completed {
+  text-decoration: line-through;
+  color: var(--sys-color-text-muted);
+}
