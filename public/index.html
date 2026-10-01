@@ -67,10 +67,10 @@
     <!-- Auth / User Profile Action -->
     <div class="flex items-center gap-3">
       <button id="auth-modal-trigger" class="px-3.5 py-1.5 text-xs sm:text-sm font-semibold text-slate-700 hover:text-emerald-600 bg-white border border-slate-200 rounded-full shadow-sm hover:border-emerald-300 transition-all flex items-center gap-2">
-        <div class="w-6 h-6 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold text-xs">
+        <div id="header-avatar-letter" class="w-6 h-6 rounded-full bg-slate-100 text-slate-600 flex items-center justify-center font-bold text-xs">
           👤
         </div>
-        <span id="user-display-name" class="hidden sm:inline">Guest User</span>
+        <span id="user-display-name" class="hidden sm:inline">Sign In</span>
       </button>
     </div>
   </header>
@@ -173,17 +173,18 @@
             Pantry Staples (Quick Add)
           </h3>
           <div class="flex flex-wrap gap-2" id="preset-tags-container">
-            <button class="stitch-preset-tag" data-ingredient="eggs">🥚 Eggs</button>
-            <button class="stitch-preset-tag" data-ingredient="garlic">🧄 Garlic</button>
-            <button class="stitch-preset-tag" data-ingredient="onion">🧅 Onion</button>
-            <button class="stitch-preset-tag" data-ingredient="tomato">🍅 Tomato</button>
-            <button class="stitch-preset-tag" data-ingredient="chicken">🍗 Chicken</button>
-            <button class="stitch-preset-tag" data-ingredient="rice">🍚 Rice</button>
-            <button class="stitch-preset-tag" data-ingredient="cheese">🧀 Cheese</button>
-            <button class="stitch-preset-tag" data-ingredient="butter">🧈 Butter</button>
-            <button class="stitch-preset-tag" data-ingredient="olive oil">🫒 Olive Oil</button>
-            <button class="stitch-preset-tag" data-ingredient="pasta">🍝 Pasta</button>
-            <button class="stitch-preset-tag" data-ingredient="salt">🧂 Salt</button>
+            <button class="stitch-preset-tag" data-ingredient="egg">🥚 Egg (ডিম)</button>
+            <button class="stitch-preset-tag" data-ingredient="onion">🧅 Onion (পিঁয়াজ)</button>
+            <button class="stitch-preset-tag" data-ingredient="green chili">🌶️ Green Chili (কাঁচা মরিচ)</button>
+            <button class="stitch-preset-tag" data-ingredient="potato">🥔 Potato (আলু)</button>
+            <button class="stitch-preset-tag" data-ingredient="chicken">🍗 Chicken (মুরগি)</button>
+            <button class="stitch-preset-tag" data-ingredient="beef">🥩 Beef (গরুর মাংস)</button>
+            <button class="stitch-preset-tag" data-ingredient="mustard oil">🫒 Mustard Oil (সরিষার তেল)</button>
+            <button class="stitch-preset-tag" data-ingredient="rice">🍚 Rice (চাল / ভাত)</button>
+            <button class="stitch-preset-tag" data-ingredient="lentil">🥣 Masoor Dal (মসুর ডাল)</button>
+            <button class="stitch-preset-tag" data-ingredient="eggplant">🍆 Eggplant (বেগুন)</button>
+            <button class="stitch-preset-tag" data-ingredient="fish">🐟 Fish / Ilish (মাছ)</button>
+            <button class="stitch-preset-tag" data-ingredient="garlic">🧄 Garlic (রসুন)</button>
           </div>
         </div>
 
@@ -193,6 +194,10 @@
             Dietary Preferences
           </h3>
           <div class="grid grid-cols-2 gap-2 text-xs font-medium text-slate-600">
+            <label class="flex items-center gap-2 p-2 bg-slate-50 rounded-lg border border-slate-200 cursor-pointer hover:bg-slate-100 transition-colors">
+              <input type="checkbox" id="filter-halal" class="rounded text-emerald-600 focus:ring-emerald-500">
+              <span>☪️ Halal</span>
+            </label>
             <label class="flex items-center gap-2 p-2 bg-slate-50 rounded-lg border border-slate-200 cursor-pointer hover:bg-slate-100 transition-colors">
               <input type="checkbox" id="filter-veg" class="rounded text-emerald-600 focus:ring-emerald-500">
               <span>🌱 Vegetarian</span>
@@ -204,10 +209,6 @@
             <label class="flex items-center gap-2 p-2 bg-slate-50 rounded-lg border border-slate-200 cursor-pointer hover:bg-slate-100 transition-colors">
               <input type="checkbox" id="filter-gf" class="rounded text-emerald-600 focus:ring-emerald-500">
               <span>🌾 Gluten-Free</span>
-            </label>
-            <label class="flex items-center gap-2 p-2 bg-slate-50 rounded-lg border border-slate-200 cursor-pointer hover:bg-slate-100 transition-colors">
-              <input type="checkbox" id="filter-keto" class="rounded text-emerald-600 focus:ring-emerald-500">
-              <span>🥑 Low-Carb</span>
             </label>
           </div>
         </div>
@@ -222,24 +223,23 @@
       </aside>
 
       <!-- ---------------- RIGHT PANEL: RECIPE RESULTS CANVAS (70% Desktop) ---------------- -->
-      <section class="w-full lg:w-[68%] space-y-5">
-        
-        <!-- Canvas Header Bar -->
-        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
+      <section class="lg:w-7/12 xl:w-3/4 space-y-6">
+
+        <!-- Header bar with Canvas Title & Sort Select -->
+        <div class="bg-white border border-slate-200 rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-sm">
           <div>
-            <h2 id="canvas-title" class="text-lg font-bold text-slate-900 flex items-center gap-2">
-              <span>✨</span> Recommended Recipes
-            </h2>
-            <p id="canvas-subtitle" class="text-xs text-slate-500">
-              Select ingredients on the left to match delicious dishes.
-            </p>
+            <h2 id="canvas-title" class="text-lg font-bold text-slate-900">Recommended Recipes</h2>
+            <p id="canvas-subtitle" class="text-xs text-slate-500">Matching your selected ingredients</p>
           </div>
 
-          <div class="flex items-center gap-3">
-            <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Sort by:</span>
-            <select id="sort-select" class="text-xs font-semibold bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-slate-700">
+          <div class="flex items-center gap-2 w-full sm:w-auto">
+            <span class="text-xs font-semibold text-slate-500 whitespace-nowrap">Sort by:</span>
+            <select 
+              id="sort-select" 
+              class="px-3 py-1.5 text-xs font-semibold bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 cursor-pointer"
+            >
               <option value="matched">Most Ingredients Matched</option>
-              <option value="time">Fastest Cooking Time</option>
+              <option value="time">Fastest Preparation Time</option>
               <option value="calories">Lowest Calories</option>
             </select>
           </div>
@@ -255,14 +255,17 @@
             </div>
             <h3 class="text-xl font-bold text-slate-900">What's in your fridge today?</h3>
             <p class="text-sm text-slate-500 max-w-md mx-auto leading-relaxed">
-              Add your leftover vegetables, proteins, and pantry items to BiteSize. We'll find recipes that maximize what you already have!
+              Add your household ingredients, spices, or leftover items to BiteSize. We'll show authentic Bangladeshi home recipes you can cook right now!
             </p>
             <div class="pt-2 flex flex-wrap justify-center gap-2">
-              <button class="px-4 py-2 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 font-semibold text-xs rounded-full border border-emerald-200 transition-colors quick-demo-btn" data-preset="tomato,garlic,chicken,pasta">
-                🍝 Try Demo: Chicken Garlic Pasta
+              <button class="px-4 py-2 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 font-semibold text-xs rounded-full border border-emerald-200 transition-colors quick-demo-btn" data-preset="chicken,onion,garlic,mustard oil">
+                🍗 Try Demo: Chicken Bhuna (মুরগির ভুনা)
               </button>
-              <button class="px-4 py-2 bg-amber-50 text-amber-700 hover:bg-amber-100 font-semibold text-xs rounded-full border border-amber-200 transition-colors quick-demo-btn" data-preset="eggs,tomato,onion">
-                🍳 Try Demo: Egg Shakshuka
+              <button class="px-4 py-2 bg-amber-50 text-amber-700 hover:bg-amber-100 font-semibold text-xs rounded-full border border-amber-200 transition-colors quick-demo-btn" data-preset="egg,potato,onion,green chili">
+                🍳 Try Demo: Dim Bhuna (ডিম ও আলু ভুনা)
+              </button>
+              <button class="px-4 py-2 bg-rose-50 text-rose-700 hover:bg-rose-100 font-semibold text-xs rounded-full border border-rose-200 transition-colors quick-demo-btn" data-preset="fish,mustard oil,green chili,turmeric">
+                🐟 Try Demo: Shorshe Ilish (সরষে ইলিশ)
               </button>
             </div>
           </div>
@@ -389,11 +392,16 @@
       </div>
 
       <!-- Footer Action -->
-      <div class="p-6 bg-slate-50 border-t border-slate-200 flex items-center justify-between rounded-b-2xl">
-        <button id="modal-bookmark-btn" class="px-5 py-2.5 bg-white border border-slate-200 text-slate-700 hover:text-rose-600 font-bold text-sm rounded-xl transition-all shadow-sm flex items-center gap-2">
-          <span>❤️</span> <span id="modal-bookmark-text">Save to Favorites</span>
-        </button>
-        <button id="modal-close-footer-btn" class="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm rounded-xl transition-all shadow">
+      <div class="p-6 bg-slate-50 border-t border-slate-200 flex flex-wrap items-center justify-between gap-3 rounded-b-2xl">
+        <div class="flex items-center gap-2">
+          <button id="modal-bookmark-btn" class="px-4 py-2.5 bg-white border border-slate-200 text-slate-700 hover:text-rose-600 font-bold text-xs sm:text-sm rounded-xl transition-all shadow-sm flex items-center gap-2">
+            <span>❤️</span> <span id="modal-bookmark-text">Save to Favorites</span>
+          </button>
+          <button id="start-cook-mode-btn" class="px-5 py-2.5 bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs sm:text-sm rounded-xl transition-all shadow-md shadow-amber-200 active:scale-95 flex items-center gap-2">
+            <span>👨‍🍳</span> Start Cook Mode (Hands-Free)
+          </button>
+        </div>
+        <button id="modal-close-footer-btn" class="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs sm:text-sm rounded-xl transition-all shadow">
           Done
         </button>
       </div>
@@ -401,34 +409,236 @@
     </div>
   </div>
 
-  <!-- ==================== AUTH / LOGIN SIMULATION MODAL ==================== -->
-  <div id="auth-modal-backdrop" class="stitch-dialog-backdrop">
-    <div class="stitch-dialog-full max-w-md p-6 space-y-6 relative bg-white">
-      <button id="close-auth-modal-btn" class="absolute top-4 right-4 w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center justify-center font-bold">
-        ✕
-      </button>
-
-      <div class="text-center space-y-2">
-        <div class="w-12 h-12 rounded-2xl bg-emerald-100 text-emerald-700 flex items-center justify-center text-2xl mx-auto font-bold">
-          🥗
+  <!-- ==================== HANDS-FREE COOK MODE OVERLAY ==================== -->
+  <div id="cook-mode-backdrop" class="stitch-dialog-backdrop">
+    <div class="stitch-cook-mode-container bg-white text-slate-900 rounded-3xl max-w-4xl w-full p-6 sm:p-10 shadow-2xl relative border border-slate-200 flex flex-col max-h-[92vh] overflow-y-auto">
+      
+      <!-- Top Navigation & Progress Header -->
+      <div class="flex items-center justify-between pb-4 border-b border-slate-200">
+        <div>
+          <span class="text-xs font-bold uppercase tracking-widest text-emerald-700 flex items-center gap-1.5">
+            <span class="w-2 h-2 rounded-full bg-emerald-600 animate-pulse"></span> Hands-Free Cook Mode
+          </span>
+          <h3 id="cook-mode-recipe-title" class="text-lg sm:text-xl font-extrabold text-slate-900 truncate max-w-md sm:max-w-xl">
+            Recipe Title
+          </h3>
         </div>
-        <h3 class="text-xl font-bold text-slate-900">Welcome to BiteSize</h3>
-        <p class="text-xs text-slate-500">Sign in to sync your saved recipes across all your devices.</p>
+
+        <button id="close-cook-mode-btn" class="w-10 h-10 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-slate-900 flex items-center justify-center font-bold text-lg transition-all border border-slate-200">
+          ✕
+        </button>
       </div>
 
-      <form id="auth-form" class="space-y-4">
-        <div>
+      <!-- Step Visual Progress Bar -->
+      <div class="w-full bg-slate-100 h-2.5 rounded-full mt-4 overflow-hidden border border-slate-200/60">
+        <div id="cook-mode-progress-bar" class="bg-emerald-600 h-full w-1/5 transition-all duration-300"></div>
+      </div>
+
+      <!-- Cook Mode Center Canvas -->
+      <div class="py-8 flex-1 flex flex-col items-center justify-center text-center space-y-6">
+        
+        <!-- Step Counter Badge -->
+        <div class="inline-flex items-center gap-2 px-4 py-1.5 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-full text-xs font-bold uppercase tracking-wider shadow-sm">
+          <span>📍</span> <span id="cook-mode-step-badge">Step 1 of 5</span>
+        </div>
+
+        <!-- Big Step Text -->
+        <div class="max-w-2xl px-2">
+          <p id="cook-mode-step-text" class="text-xl sm:text-2xl md:text-3xl font-extrabold leading-relaxed text-slate-900 tracking-tight">
+            Boil penne pasta in salted water according to package directions until al dente.
+          </p>
+        </div>
+
+        <!-- Audio Speech Controls Toolbar -->
+        <div class="flex flex-wrap items-center justify-center gap-3 pt-2">
+          <button id="cook-speak-btn" class="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs sm:text-sm rounded-xl transition-all shadow-md shadow-emerald-200 flex items-center gap-2 active:scale-95">
+            <span class="text-base">🔊</span> <span id="cook-speak-btn-text">Read Step Aloud</span>
+          </button>
+          <button id="cook-pause-btn" class="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs sm:text-sm rounded-xl transition-all border border-slate-200 flex items-center gap-2 hidden">
+            <span>⏸️</span> Pause Voice
+          </button>
+
+          <div class="flex items-center gap-1.5 bg-slate-50 px-3.5 py-2 rounded-xl border border-slate-200 text-xs font-medium text-slate-700 shadow-sm">
+            <span class="text-slate-500 font-semibold">Voice:</span>
+            <select id="cook-voice-select" class="bg-transparent text-emerald-700 font-bold focus:outline-none cursor-pointer max-w-[150px] truncate">
+              <option value="auto">Natural (Auto)</option>
+            </select>
+          </div>
+
+          <div class="flex items-center gap-1.5 bg-slate-50 px-3.5 py-2 rounded-xl border border-slate-200 text-xs font-medium text-slate-700 shadow-sm">
+            <span class="text-slate-500 font-semibold">Speed:</span>
+            <select id="cook-voice-speed" class="bg-transparent text-emerald-700 font-bold focus:outline-none cursor-pointer">
+              <option value="0.8">0.8x</option>
+              <option value="1.0" selected>1.0x</option>
+              <option value="1.2">1.2x</option>
+            </select>
+          </div>
+
+          <label class="flex items-center gap-2 bg-slate-50 px-3.5 py-2 rounded-xl border border-slate-200 text-xs text-slate-700 cursor-pointer hover:bg-slate-100 shadow-sm">
+            <input type="checkbox" id="cook-auto-read" class="rounded text-emerald-600 focus:ring-emerald-500 bg-white border-slate-300">
+            <span class="font-medium">Auto-read step change</span>
+          </label>
+        </div>
+
+        <!-- Smart Step Cooking Timer Widget -->
+        <div class="w-full max-w-md bg-slate-50 border border-slate-200 rounded-2xl p-5 shadow-sm space-y-3 mt-4">
+          <div class="flex items-center justify-between text-xs text-slate-500">
+            <span class="font-semibold flex items-center gap-1.5 text-slate-700">
+              <span>⏱️</span> Step Cooking Timer
+            </span>
+            <span id="cook-timer-detected" class="text-emerald-800 font-bold text-[11px] bg-emerald-100 px-2.5 py-0.5 rounded-full border border-emerald-200">
+              Detected: 8 mins
+            </span>
+          </div>
+
+          <!-- Timer Digital Display -->
+          <div class="flex items-center justify-center gap-4 py-2">
+            <div id="cook-timer-display" class="font-mono text-4xl sm:text-5xl font-extrabold tracking-wider text-emerald-700">
+              08:00
+            </div>
+          </div>
+
+          <!-- Timer Action Buttons -->
+          <div class="flex flex-wrap items-center justify-center gap-2 pt-1">
+            <button id="cook-timer-start" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl transition-all active:scale-95 flex items-center gap-1 shadow-sm">
+              <span>▶</span> Start
+            </button>
+            <button id="cook-timer-pause" class="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs rounded-xl transition-all active:scale-95 flex items-center gap-1 shadow-sm hidden">
+              <span>⏸</span> Pause
+            </button>
+            <button id="cook-timer-reset" class="px-3.5 py-2 bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 font-semibold text-xs rounded-xl transition-all shadow-sm">
+              🔄 Reset
+            </button>
+            <button class="cook-timer-add-btn px-3.5 py-2 bg-white border border-slate-200 hover:bg-emerald-50 hover:border-emerald-200 text-emerald-700 font-bold text-xs rounded-xl transition-all shadow-sm" data-seconds="60">
+              +1m
+            </button>
+            <button class="cook-timer-add-btn px-3.5 py-2 bg-white border border-slate-200 hover:bg-emerald-50 hover:border-emerald-200 text-emerald-700 font-bold text-xs rounded-xl transition-all shadow-sm" data-seconds="300">
+              +5m
+            </button>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Bottom Step Navigation Footer -->
+      <div class="flex items-center justify-between pt-4 border-t border-slate-200 gap-3">
+        <button id="cook-prev-btn" class="px-5 py-3 bg-white hover:bg-slate-100 text-slate-700 font-bold text-xs sm:text-sm rounded-xl transition-all border border-slate-200 flex items-center gap-2 shadow-sm">
+          <span>⬅️</span> Previous Step
+        </button>
+
+        <span class="text-xs text-slate-400 font-medium hidden sm:inline">Use ← → keys on keyboard to navigate</span>
+
+        <button id="cook-next-btn" class="px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs sm:text-sm rounded-xl transition-all shadow-md shadow-emerald-200 flex items-center gap-2 active:scale-95">
+          <span>Next Step</span> <span>➡️</span>
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ==================== AUTH / LOGIN MODAL ==================== -->
+  <div id="auth-modal-backdrop" class="stitch-dialog-backdrop">
+    <div class="stitch-dialog-full max-w-md p-6 space-y-5 relative bg-white">
+      <button id="close-auth-modal-btn" class="absolute top-4 right-4 w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center justify-center font-bold">✕</button>
+
+      <div class="text-center space-y-1.5">
+        <div class="w-12 h-12 rounded-2xl bg-emerald-100 text-emerald-700 flex items-center justify-center text-2xl mx-auto font-bold">🥗</div>
+        <h3 id="auth-modal-title" class="text-xl font-bold text-slate-900">Welcome Back</h3>
+        <p id="auth-modal-subtitle" class="text-xs text-slate-500">Sign in to sync your saved recipes across all your devices.</p>
+      </div>
+
+      <!-- Inline Error -->
+      <div id="auth-error-message" class="hidden text-xs text-red-600 bg-red-50 border border-red-100 p-3 rounded-xl text-center font-medium"></div>
+
+
+      <form id="auth-form" class="space-y-3">
+        <!-- Name field (Sign-up only) -->
+        <div id="auth-name-group" class="hidden">
           <label class="block text-xs font-semibold text-slate-700 mb-1">Display Name</label>
-          <input type="text" id="auth-name-input" placeholder="e.g. Zion Chef" value="Zion" class="w-full px-3.5 py-2 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500">
+          <input type="text" id="auth-name-input" placeholder="e.g. Zion Chef" class="w-full px-3.5 py-2 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500">
         </div>
         <div>
           <label class="block text-xs font-semibold text-slate-700 mb-1">Email Address</label>
-          <input type="email" id="auth-email-input" placeholder="zion@example.com" value="zion@bitesize.app" class="w-full px-3.5 py-2 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500">
+          <input type="email" id="auth-email-input" placeholder="you@example.com" class="w-full px-3.5 py-2 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500">
         </div>
-        <button type="submit" class="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm rounded-xl transition-all shadow-md">
-          Sign In / Continue
-        </button>
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Password</label>
+          <input type="password" id="auth-password-input" placeholder="••••••••" class="w-full px-3.5 py-2 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500">
+        </div>
+
+        <!-- Forgot password (sign-in only) -->
+        <div id="auth-forgot-password-container" class="text-right">
+          <button type="button" id="auth-forgot-password-btn" class="text-xs font-semibold text-emerald-600 hover:text-emerald-700">Forgot password?</button>
+        </div>
+
+        <button id="auth-submit-btn" type="submit" class="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm rounded-xl transition-all shadow-md">Sign In</button>
       </form>
+
+      <p class="text-center text-xs text-slate-500">
+        <button id="auth-toggle-mode-btn" type="button" class="font-bold text-emerald-600 hover:underline">Don't have an account? Sign up</button>
+      </p>
+    </div>
+  </div>
+
+  <!-- ==================== USER PROFILE MODAL ==================== -->
+  <div id="profile-modal-backdrop" class="stitch-dialog-backdrop">
+    <div class="stitch-dialog-full max-w-sm p-6 space-y-6 relative bg-white">
+      <button id="close-profile-modal-btn" class="absolute top-4 right-4 w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center justify-center font-bold">✕</button>
+
+      <div class="text-center space-y-2">
+        <div class="w-16 h-16 rounded-3xl bg-emerald-100 text-emerald-700 flex items-center justify-center text-3xl mx-auto font-bold" id="profile-avatar-letter">👤</div>
+        <h3 class="text-xl font-bold text-slate-900" id="profile-modal-name">User Name</h3>
+        <p class="text-xs text-slate-500" id="profile-modal-email">user@example.com</p>
+      </div>
+
+      <!-- Email verification banner -->
+      <div id="profile-verification-banner" class="hidden bg-orange-50 border border-orange-200 text-orange-800 text-xs px-3 py-2 rounded-lg flex items-center justify-between">
+        <span class="flex items-center gap-1">⚠️ <span>Email not verified</span></span>
+        <button id="profile-resend-verification-btn" type="button" class="font-bold underline hover:text-orange-900">Resend</button>
+      </div>
+
+      <!-- Profile Edit Form -->
+      <form id="profile-form" class="space-y-4 pt-4 border-t border-slate-100">
+        <div id="profile-error-message" class="hidden text-xs text-red-600 bg-red-50 border border-red-100 p-3 rounded-xl text-center font-medium"></div>
+        <div id="profile-success-message" class="hidden text-xs text-emerald-600 bg-emerald-50 border border-emerald-100 p-3 rounded-xl text-center font-medium"></div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Display Name</label>
+          <input type="text" id="profile-name-input" class="w-full px-3.5 py-2 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500" required>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">New Password <span class="text-[10px] text-slate-400 font-normal">(Optional)</span></label>
+          <input type="password" id="profile-password-input" placeholder="Leave blank to keep current" class="w-full px-3.5 py-2 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500">
+        </div>
+        <div id="profile-current-password-container">
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Current Password <span class="text-[10px] text-slate-400 font-normal">(Required to save changes)</span></label>
+          <input type="password" id="profile-current-password-input" placeholder="Enter current password" class="w-full px-3.5 py-2 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500">
+        </div>
+        <button type="submit" class="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm rounded-xl transition-all shadow-md">Save Changes</button>
+      </form>
+
+      <!-- Logout + Delete Zone -->
+      <div class="pt-4 border-t border-slate-100 space-y-2">
+        <button id="profile-logout-btn" type="button" class="w-full py-3 bg-red-50 hover:bg-red-100 text-red-600 font-bold text-sm rounded-xl transition-all">Log Out</button>
+
+        <div id="delete-zone">
+          <button id="profile-delete-btn" type="button" class="w-full py-2 text-slate-400 hover:text-red-500 font-semibold text-xs rounded-xl transition-all duration-200">
+            Delete Account Permanently
+          </button>
+          <div id="delete-confirm-panel" class="hidden mt-2 p-4 rounded-2xl border border-red-200 bg-red-50 space-y-3">
+            <p class="text-xs font-bold text-red-700">⚠️ This action is permanent and cannot be undone.</p>
+            <div id="delete-password-wrapper">
+              <label class="block text-[11px] font-semibold text-red-700 mb-1">Confirm your password to continue</label>
+              <input type="password" id="delete-confirm-password" placeholder="Enter your password" class="w-full px-3.5 py-2 text-sm bg-white border border-red-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-red-400 text-slate-800">
+            </div>
+            <div id="delete-error-msg" class="hidden text-[11px] text-red-600 bg-white border border-red-200 px-3 py-2 rounded-lg font-medium"></div>
+            <div class="flex gap-2">
+              <button id="delete-cancel-btn" type="button" class="flex-1 py-2 text-xs font-semibold text-slate-600 bg-white hover:bg-slate-100 border border-slate-200 rounded-xl transition-all">Cancel</button>
+              <button id="delete-confirm-btn" type="button" class="flex-1 py-2 text-xs font-bold text-white bg-red-600 hover:bg-red-700 rounded-xl transition-all shadow-sm">Yes, Delete My Account</button>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -539,6 +749,6 @@
   <div id="toast-container" class="toast-container"></div>
 
   <!-- Client JavaScript -->
-  <script src="app.js"></script>
+  <script type="module" src="app.js?v=2.1.0"></script>
 </body>
 </html>
