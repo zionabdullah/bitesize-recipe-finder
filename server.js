@@ -391,7 +391,7 @@ async function fetchLiveMealDBRecipes(ingredientStr = '') {
             }
           }
 
-          const used = ingredientsList.filter(ing => 
+          const used = ingredientsList.filter(ing =>
             queryIngredients.some(q => ing.name.includes(q) || q.includes(ing.name))
           );
           const missed = ingredientsList.filter(ing => !used.includes(ing));
@@ -459,12 +459,12 @@ async function fetchLiveMealDBRecipes(ingredientStr = '') {
 // 0. Firebase Config Endpoint (Serves credentials safely from process.env)
 app.get('/api/firebase-config', (req, res) => {
   res.json({
-    apiKey: process.env.FIREBASE_API_KEY || 'AIzaSyBDObvjFFzMFE8LVFuKAXmgul9t-Cch0Fg',
-    authDomain: process.env.FIREBASE_AUTH_DOMAIN || 'bitesize-recipe-finder.firebaseapp.com',
-    projectId: process.env.FIREBASE_PROJECT_ID || 'bitesize-recipe-finder',
-    storageBucket: process.env.FIREBASE_STORAGE_BUCKET || 'bitesize-recipe-finder.firebasestorage.app',
-    messagingSenderId: process.env.FIREBASE_MESSAGING_SENDER_ID || '135781162303',
-    appId: process.env.FIREBASE_APP_ID || '1:135781162303:web:bde3be0b2a1ed59d6e878a'
+    apiKey: process.env.FIREBASE_API_KEY,
+    authDomain: process.env.FIREBASE_AUTH_DOMAIN,
+    projectId: process.env.FIREBASE_PROJECT_ID,
+    storageBucket: process.env.FIREBASE_STORAGE_BUCKET,
+    messagingSenderId: process.env.FIREBASE_MESSAGING_SENDER_ID,
+    appId: process.env.FIREBASE_APP_ID
   });
 });
 
