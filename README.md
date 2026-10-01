@@ -1,438 +1,447 @@
 # 🍳 BiteSize: Smart Ingredient Recipe Finder & Meal Planner
 
-A modern web application that helps reduce household food waste by finding recipes based on ingredients you already have. Search by the items in your fridge, get personalized recipe recommendations, and plan meals efficiently.
+[![Live Demo](https://img.shields.io/badge/Live%20Demo-bitesize--recipe--finder.vercel.app-16a34a?style=for-the-badge&logo=vercel&logoColor=white)](https://bitesize-recipe-finder.vercel.app)
+[![GitHub Repository](https://img.shields.io/badge/GitHub-zionabdullah%2Fbitesize--recipe--finder-0f172a?style=for-the-badge&logo=github&logoColor=white)](https://github.com/zionabdullah/bitesize-recipe-finder)
+[![Node.js Version](https://img.shields.io/badge/Node.js-%3E%3D18.0.0-339933?style=for-the-badge&logo=node.js&logoColor=white)](https://nodejs.org)
+[![Express](https://img.shields.io/badge/Express-v4.19.2-000000?style=for-the-badge&logo=express&logoColor=white)](https://expressjs.com)
+[![License: MIT](https://img.shields.io/badge/License-MIT-amber.svg?style=for-the-badge)](LICENSE)
 
-**Live Demo:** [https://bitesize-recipe-finder.vercel.app](https://bitesize-recipe-finder.vercel.app)
+> **BiteSize** is an ingredient-first, AI-augmented culinary web application engineered to eliminate household food waste. Rather than asking *"what do you want to cook?"*, BiteSize asks *"what do you already have?"* — matching pantry items with chef-crafted recipes, utilizing Google Gemini AI computer vision for fridge scanning, offering step-by-step hands-free voice assistance, and syncing favorites via Firebase Cloud Authentication.
+
+---
+
+## 📌 Quick Access Links
+
+| Resource | URL |
+| :--- | :--- |
+| 🌐 **Live Website** | [https://bitesize-recipe-finder.vercel.app](https://bitesize-recipe-finder.vercel.app) |
+| 📂 **GitHub Repository** | [https://github.com/zionabdullah/bitesize-recipe-finder](https://github.com/zionabdullah/bitesize-recipe-finder) |
+| 📑 **Full User Manual** | [Jump to Step-by-Step User Manual](#-step-by-step-user-manual) |
+| 💻 **Local Installation** | [Jump to Localhost Installation Guide](#-localhost-installation--setup-guide) |
+| 🖥️ **Browser Compatibility** | [Jump to Browser Compatibility Matrix](#-live-website-access--browser-compatibility) |
 
 ---
 
 ## 📋 Table of Contents
 
-- [Overview](#overview)
-- [Features](#features)
-- [Tech Stack](#tech-stack)
-- [Architecture](#architecture)
-- [Project Structure](#project-structure)
-- [Getting Started](#getting-started)
-- [Environment Setup](#environment-setup)
-- [API Endpoints](#api-endpoints)
-- [Design System](#design-system)
-- [Development](#development)
-- [Deployment](#deployment)
+1. [Overview & Core Value](#-overview--core-value)
+2. [Live Website Access & Browser Compatibility](#-live-website-access--browser-compatibility)
+3. [Localhost Installation & Setup Guide](#-localhost-installation--setup-guide)
+   - [Required Software & Version Specifications](#required-software--version-specifications)
+   - [Step-by-Step Localhost Setup](#step-by-step-localhost-setup)
+   - [Environment Variables Configuration](#environment-variables-configuration)
+   - [Zero-Config Fallback Mode (Works with 0 API Keys)](#zero-config-fallback-mode-works-with-0-api-keys)
+4. [Step-by-Step User Manual (Feature Guide)](#-step-by-step-user-manual)
+   - [1. Ingredient Discovery & Smart Autocomplete](#1-ingredient-discovery--smart-autocomplete)
+   - [2. AI Smart Fridge Vision Scanner (Gemini Multimodal)](#2-ai-smart-fridge-vision-scanner-gemini-multimodal)
+   - [3. Virtual Fridge Inventory Management](#3-virtual-fridge-inventory-management)
+   - [4. Dietary Preferences & Intelligent Sorting](#4-dietary-preferences--intelligent-sorting)
+   - [5. Recipe Details, Macros & Shopping List](#5-recipe-details-macros--shopping-list)
+   - [6. Hands-Free Cook Mode (Audio Narration & Smart Timer)](#6-hands-free-cook-mode-audio-narration--smart-timer)
+   - [7. User Authentication & Cloud Synchronization](#7-user-authentication--cloud-synchronization)
+5. [System Architecture & Data Flow](#-system-architecture--data-flow)
+6. [API Endpoints & Security Specifications](#-api-endpoints--security-specifications)
+7. [Project Directory Structure](#-project-directory-structure)
+8. [Presentation Checklist (Course Evaluation)](#-presentation-checklist-course-evaluation)
+9. [License & Acknowledgments](#-license--acknowledgments)
 
 ---
 
-## 🎯 Overview
+## 💡 Overview & Core Value
 
-**BiteSize** is an ingredient-first recipe finder engineered to reduce household food waste. The design philosophy centers on **speed, clarity, and visual appetite**, helping users make the most of available ingredients and discover new meals.
+According to global environmental statistics, more than one-third of household groceries end up in landfills simply because consumers lack immediate ideas for leftover items. **BiteSize v2.0** solves this by:
 
-The application intelligently bridges the gap between users' pantries and recipe discovery, with built-in fallback mechanisms for reliable operation even when external APIs are unavailable.
-
----
-
-## ✨ Features
-
-- **Ingredient-Based Search** - Find recipes by searching for ingredients you have on hand
-- **Smart Fallback System** - Built-in mock dataset ensures the app works without API keys
-- **Detailed Recipe Information** - View complete recipes with ingredients, instructions, and nutritional data
-- **Autocomplete Suggestions** - Intelligent ingredient autocomplete based on popular items
-- **Nutritional Information** - Calorie counts, protein, carbs, and fat breakdowns
-- **Prep Time & Servings** - Quick reference for cooking duration and portion sizes
-- **Dietary Filters** - Vegetarian, Vegan, Gluten-Free, Low-Carb, and High-Protein options
-- **Responsive Design** - Optimized for mobile, tablet, and desktop viewing
-- **CORS-Enabled API** - Secure cross-origin requests for frontend flexibility
+- **Targeted Ingredient Matching:** Prioritizes recipes maximizing items you already possess (`usedIngredients`) while minimizing extra grocery runs (`missedIngredients`).
+- **AI Fridge Vision (Gemini):** Takes camera snaps of fridge or pantry shelves and automatically parses ingredients using multimodal vision AI.
+- **Hands-Free Cooking Experience:** Built-in Web Speech & ElevenLabs voice narration so home cooks never have to touch oily or wet phone screens while cooking.
+- **Robust Fallbacks:** Designed with a zero-failure philosophy — if external APIs (Spoonacular, Gemini, Firebase) are offline or keys are absent, the application gracefully falls back to authentic curated datasets (including traditional South Asian & global favorites).
 
 ---
 
-## 🛠️ Tech Stack
+## 🌐 Live Website Access & Browser Compatibility
 
-### Backend
-- **Runtime:** Node.js
-- **Framework:** Express.js (v4.19.2)
-- **Middleware:**
-  - CORS (v2.8.5) - Cross-Origin Resource Sharing
-  - Dotenv (v16.4.5) - Environment variable management
-- **API Integration:** Spoonacular API (with intelligent fallback to mock data)
-- **Deployment:** Vercel (Serverless)
+The live application is hosted globally on Vercel's high-speed edge network:
+👉 **[https://bitesize-recipe-finder.vercel.app](https://bitesize-recipe-finder.vercel.app)**
 
-### Frontend
-- **HTML/CSS/JavaScript** - Vanilla web technologies
-- **Design System:** Google Stitch (Material 3 Design Tokens)
-- **Styling:** Custom CSS with Stitch Material 3 color tokens
-- **Font:** Inter / Roboto (Google Web Fonts)
+### Supported Browsers & Tested Versions
 
-### External Services
-- **Recipe Data:** Spoonacular API
-- **Hosting:** Vercel
-- **Images:** Unsplash, Spoonacular CDN
+BiteSize leverages modern web standards including HTML5 Canvas, WebRTC (`navigator.mediaDevices`), Web Speech API (`SpeechSynthesis`), CSS Grid, and Fetch API. It has been tested and certified on the following browser versions:
 
-### DevOps & Tools
-- **Package Manager:** npm
-- **Environment:** CommonJS modules
-- **Watch Mode:** Node.js `--watch` flag for development
+| Browser | Desktop Version | Mobile Version | Support Status | Notes |
+| :--- | :--- | :--- | :---: | :--- |
+| **Google Chrome** | v120.0 or newer | v120.0+ (Android) |  **Full Support** | Recommended for fastest AI Vision & Speech synthesis |
+| **Mozilla Firefox** | v120.0 or newer | v120.0+ (Android) |  **Full Support** | Full audio & camera support enabled |
+| **Apple Safari** | v17.0 or newer (macOS) | v17.0+ (iOS/iPadOS) |  **Full Support** | Camera permission prompt required for Fridge Snap |
+| **Microsoft Edge** | v120.0 or newer | v120.0+ (Android/iOS) |  **Full Support** | Chromium-based; optimal performance |
+| **Opera / Brave** | Latest Stable | Latest Stable |  **Full Support** | Ensure shields allow camera access for Fridge Snap |
+
+### Required Device Permissions
+When using the live website, your browser may request the following standard permissions:
+1. **Camera Permission (`video` capture):** Used exclusively when opening the *AI Fridge Scanner* in live camera mode. No video feed is recorded or stored; snapshots are processed purely in-memory.
+2. **Audio Output:** Used by *Hands-Free Cook Mode* to read cooking steps aloud.
 
 ---
 
-## 🏗️ Architecture
+## 💻 Localhost Installation & Setup Guide
 
-### High-Level Architecture
+If you wish to inspect, develop, or grade the application locally on your computer, follow the comprehensive setup instructions below.
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                     Frontend (SPA)                          │
-│              (HTML/CSS/JavaScript - Public/)                │
-├─────────────────────────────────────────────────────────────┤
-│                                                             │
-│  ┌─────────────────────────────────────────────────────┐   │
-│  │       Express.js Backend (server.js)                │   │
-│  │                                                     │   │
-│  │  ┌──────────────────────────────────────────────┐  │   │
-│  │  │  API Proxy & Middleware                      │  │   │
-│  │  │  • CORS handling                             │  │   │
-│  │  │  • Static file serving (public/)             │  │   │
-│  │  │  • JSON body parsing                         │  │   │
-│  │  └──────────────────────────────────────────────┘  │   │
-│  │                                                     │   │
-│  │  ┌──────────────────────────────────────────────┐  │   │
-│  │  │  Recipe Endpoints                            │  │   │
-│  │  │  • GET /api/recipes/search                   │  │   │
-│  │  │  • GET /api/recipes/:id/information          │  │   │
-│  │  │  • GET /api/ingredients/autocomplete         │  │   │
-│  │  └──────────────────────────────────────────────┘  │   │
-│  │                                                     │   │
-│  │  ┌──────────────────────────────────────────────┐  │   │
-│  │  │  Data Sources                                │  │   │
-│  │  │  ├─ Spoonacular API (Primary)               │  │   │
-│  │  │  └─ Mock Dataset (Fallback)                 │  │   │
-│  │  └──────────────────────────────────────────────┘  │   │
-│  └─────────────────────────────────────────────────────┘   │
-│                                                             │
-└─────────────────────────────────────────────────────────────┘
-```
+### Required Software & Version Specifications
 
-### Data Flow
+To run BiteSize locally, the following software must be installed on your system:
 
-1. **User Input** → Frontend collects ingredient selections
-2. **API Request** → Frontend sends request to Express backend
-3. **Backend Processing** → 
-   - Attempts to fetch from Spoonacular API
-   - Falls back to mock dataset on error or missing API key
-   - Returns unified response format
-4. **Response** → Frontend displays results with source metadata
+| Software | Minimum Version Required | Recommended Version | Verification Command | Download Link |
+| :--- | :--- | :--- | :--- | :--- |
+| **Node.js** | `v18.0.0` | `v20.x` (LTS) | `node -v` | [nodejs.org](https://nodejs.org/) |
+| **npm** | `v9.0.0` | `v10.x` | `npm -v` | Bundled with Node.js |
+| **Git** | `v2.30.0` | Latest | `git --version` | [git-scm.com](https://git-scm.com/) |
+| **Web Browser** | Chrome 120+ / Edge 120+ / Firefox 120+ / Safari 17+ | Latest | — | — |
 
-### Key Design Patterns
-
-- **API Proxy Pattern** - Backend acts as intermediary between frontend and Spoonacular
-- **Graceful Degradation** - Mock data ensures functionality without external dependencies
-- **Serverless Compatible** - Express app exports for Vercel deployment
+*Operating System Compatibility:* Fully supported on **macOS (Apple Silicon & Intel)**, **Windows 10/11 (Command Prompt, PowerShell, or WSL2)**, and **Linux (Ubuntu 20.04+, Debian, Fedora)**.
 
 ---
 
-## 📁 Project Structure
+### Step-by-Step Localhost Setup
 
-```
-bitesize-recipe-finder/
-├── server.js                 # Express application & API endpoints
-├── package.json              # Project dependencies & metadata
-├── package-lock.json         # Locked dependency versions
-├── vercel.json               # Vercel deployment configuration
-├── .env.example              # Environment variable template
-├── .gitignore                # Git ignore rules
-├── Design.md                 # Design system & UI specifications
-├── README.md                 # This file
-└── public/                   # Static frontend files (HTML, CSS, JS, images)
-    ├── index.html
-    ├── styles.css
-    ├── app.js
-    └── assets/               # Images and brand materials
-```
-
-### Key Files Explained
-
-| File | Purpose |
-|------|---------|
-| `server.js` | Main application server - contains all API endpoints and mock data |
-| `package.json` | Project metadata and dependencies (Express, CORS, Dotenv) |
-| `vercel.json` | Serverless function configuration for Vercel |
-| `.env.example` | Template for required environment variables |
-| `Design.md` | Complete design system, color palette, typography, and UI patterns |
-| `public/` | Frontend assets served as static files |
-
----
-
-## 🚀 Getting Started
-
-### Prerequisites
-
-- Node.js (v18+ recommended)
-- npm (included with Node.js)
-- Git
-
-### Installation
-
-1. **Clone the repository**
-   ```bash
-   git clone https://github.com/zionabdullah/bitesize-recipe-finder.git
-   cd bitesize-recipe-finder
-   ```
-
-2. **Install dependencies**
-   ```bash
-   npm install
-   ```
-
-3. **Set up environment variables**
-   ```bash
-   cp .env.example .env
-   ```
-
-4. **Add Spoonacular API Key (optional)**
-   - Get a free API key from [spoonacular.com](https://spoonacular.com/food-api)
-   - Add to `.env`:
-     ```
-     SPOONACULAR_API_KEY=your_api_key_here
-     ```
-   - The app works without it using the mock dataset
-
----
-
-## 🔧 Environment Setup
-
-### `.env` Variables
-
-```env
-# Spoonacular API Configuration
-SPOONACULAR_API_KEY=your_spoonacular_api_key_here
-
-# Server Configuration
-PORT=3000
-```
-
-**Note:** The application works in **demo mode** without an API key, using a rich mock dataset included in `server.js`.
-
----
-
-## 📡 API Endpoints
-
-### 1. Search Recipes by Ingredients
-
-**Endpoint:** `GET /api/recipes/search?ingredients=chicken,garlic,tomato`
-
-**Query Parameters:**
-- `ingredients` (required) - Comma-separated ingredient list
-
-**Response:**
-```json
-{
-  "source": "spoonacular" | "mock",
-  "data": [
-    {
-      "id": 101,
-      "title": "Creamy Garlic Parmesan Chicken & Tomato Pasta",
-      "image": "https://...",
-      "readyInMinutes": 25,
-      "servings": 4,
-      "calories": 520,
-      "protein": "38g",
-      "carbs": "42g",
-      "fat": "22g",
-      "dietary": ["High-Protein"],
-      "usedIngredientCount": 4,
-      "missedIngredientCount": 2,
-      "usedIngredients": [...],
-      "missedIngredients": [...],
-      "instructions": [...]
-    }
-  ]
-}
-```
-
-**Status Codes:**
-- `200` - Success
-- `400` - Missing required `ingredients` parameter
-
----
-
-### 2. Get Detailed Recipe Information
-
-**Endpoint:** `GET /api/recipes/:id/information`
-
-**Path Parameters:**
-- `id` (required) - Recipe ID number
-
-**Response:**
-```json
-{
-  "source": "spoonacular" | "mock",
-  "data": {
-    "id": 101,
-    "title": "...",
-    "image": "...",
-    "readyInMinutes": 25,
-    "servings": 4,
-    "instructions": [...],
-    "usedIngredients": [...],
-    "missedIngredients": [...]
-  }
-}
-```
-
----
-
-### 3. Autocomplete Ingredients
-
-**Endpoint:** `GET /api/ingredients/autocomplete?query=chic`
-
-**Query Parameters:**
-- `query` (optional) - Ingredient search term
-
-**Response:**
-```json
-[
-  "chicken",
-  "chicken breast",
-  "chicken thighs",
-  "chicken wing",
-  "chickpea",
-  "chickpeas"
-]
-```
-
----
-
-## 🎨 Design System
-
-The application follows **Google Stitch Material 3** design tokens. Complete specifications are in [`Design.md`](Design.md).
-
-### Color Palette
-
-| Token | Hex Code | Usage |
-|-------|----------|-------|
-| `primary` | `#006b2c` | Primary buttons, active ingredients |
-| `secondary` | `#9d4300` | Highlight tags, cooking time badges |
-| `surface` | `#FAFAFA` | Main background |
-| `surface-container` | `#FFFFFF` | Cards, modals |
-| `outline` | `#E5E7EB` | Borders, dividers |
-| `text-primary` | `#0F172A` | Headlines, body text |
-
-### Typography
-
-- **Font:** Inter / Roboto
-- **Headline Large:** 32px, Bold - Landing page hero
-- **Title Medium:** 20px, Semi-Bold - Recipe titles
-- **Body Medium:** 14px, Regular - Instructions, ingredients
-- **Label Small:** 12px, Medium - Badges, tags
-
-### Responsive Layout
-
-- **Mobile** (< 640px) - Single column, collapsible sidebar
-- **Tablet** (640px - 1024px) - 2-column recipe grid
-- **Desktop** (> 1024px) - Sidebar (30%) + Content (70%)
-
----
-
-## 👨‍💻 Development
-
-### Run Development Server
-
+#### Step 1: Clone the Repository
+Open your terminal (macOS/Linux) or PowerShell/Command Prompt (Windows) and run:
 ```bash
-npm run dev
+git clone https://github.com/zionabdullah/bitesize-recipe-finder.git
+cd bitesize-recipe-finder
 ```
 
-Starts the server with file watching enabled. Server runs on `http://localhost:3000`.
-
-### Run Production Server
-
+#### Step 2: Install Node Dependencies
+Install the required project dependencies listed in `package.json`:
 ```bash
-npm start
+npm install
 ```
+*(Dependencies installed: `express`, `cors`, `dotenv`, `express-rate-limit`, `vercel`)*
 
-Starts the Express server in production mode.
-
-### Server Output
-
+#### Step 3: Configure Environment Variables
+Copy the template configuration file:
+```bash
+cp .env.example .env
 ```
+*(On Windows Command Prompt: `copy .env.example .env`)*
+
+Open the `.env` file in your preferred code editor. (See the next section for configuration details).
+
+#### Step 4: Run the Application
+You can run the application in either **Development Mode** (with automatic hot-reloading) or **Production Mode**:
+
+- **Option A: Development Mode (Auto-reload on file changes)**
+  ```bash
+  npm run dev
+  ```
+  *(Uses Node.js native `--watch` mode)*
+
+- **Option B: Production Mode**
+  ```bash
+  npm start
+  ```
+
+#### Step 5: Open in Your Browser
+Once the terminal displays the startup banner:
+```text
 =======================================================
   BiteSize Web App is running live on http://localhost:3000
-  API Proxy Status: Connected (Spoonacular Key Active)
+  API Proxy Status: Connected
 =======================================================
 ```
-
-### Debug Logging
-
-The application includes console logging for:
-- Recipe search requests
-- API proxy calls and responses
-- Fallback to mock data
-- API errors and status codes
+Open your web browser and navigate to:
+👉 **`http://localhost:3000`**
 
 ---
 
-## 🌐 Deployment
+### Environment Variables Configuration
 
-### Deploy to Vercel
+Here is an explanation of all variables available in `.env`:
 
-1. **Push to GitHub**
-   ```bash
-   git push origin main
-   ```
+```env
+# Application Port
+PORT=3000
 
-2. **Connect to Vercel**
-   - Visit [vercel.com](https://vercel.com)
-   - Import the GitHub repository
-   - Add environment variables in Vercel dashboard
-   - Deploy automatically on each push
+# Spoonacular API Key (Optional)
+# Obtain a free key from: https://spoonacular.com/food-api
+SPOONACULAR_API_KEY=your_spoonacular_key_here
 
-3. **Configuration**
-   - `vercel.json` automatically configures the Vercel serverless environment
-   - Express app exports as a serverless function
+# Google Gemini API Key for AI Fridge Vision (Optional)
+# Obtain a free key from: https://aistudio.google.com/
+GEMINI_API_KEY=your_gemini_api_key_here
 
-### Environment Variables in Vercel
+# ElevenLabs API Key for Neural Voice Synthesis (Optional)
+# Defaults to Web Speech API if omitted
+ELEVENLABS_API_KEY=
+ELEVENLABS_VOICE_ID=21m00Tcm4TlvDq8ikWAM
 
-Add in Vercel project settings:
+# Firebase Web Configuration for Cloud Auth & User Sync (Optional)
+# Obtain from your Firebase Console (Project Settings -> General)
+FIREBASE_API_KEY=your_firebase_api_key
+FIREBASE_AUTH_DOMAIN=your_project.firebaseapp.com
+FIREBASE_PROJECT_ID=your_project_id
+FIREBASE_STORAGE_BUCKET=your_project.appspot.com
+FIREBASE_MESSAGING_SENDER_ID=your_sender_id
+FIREBASE_APP_ID=your_app_id
 ```
-SPOONACULAR_API_KEY=your_api_key_here
+
+### Zero-Config Fallback Mode (Works with 0 API Keys!)
+> [!NOTE]
+> **No API keys? No problem!**
+> The application is engineered with an intelligent **Mock Data Engine**. If you leave the `.env` keys empty:
+> 1. Recipe search automatically utilizes the rich, authentic South Asian & Continental mock database (Chicken Bhuna, Dim Bhuna, Masoor Dal, Shorshe Ilish, Garlic Parmesan Pasta, etc.).
+> 2. AI Fridge Vision automatically supplies intelligent recognized mock pantry detections.
+> 3. Voice guidance falls back to the native browser `window.speechSynthesis`.
+> 4. Authentication operates in safe demo fallback or local state.
+> 
+> **You can test 100% of BiteSize features immediately upon cloning without registering for any third-party service!**
+
+---
+
+## 📖 Step-by-Step User Manual
+
+Welcome to the BiteSize user guide. Follow these step-by-step instructions to explore all primary capabilities.
+
+```
+       ┌────────────────────────────────────────────────────────┐
+       │                 BiteSize User Workflow                 │
+       └──────────────────────────┬─────────────────────────────┘
+                                  │
+         ┌────────────────────────┴────────────────────────┐
+         ▼                                                 ▼
+  [Input Ingredients]                               [AI Fridge Snap]
+  Type items, select tags,                        Take live photo or upload;
+  or click pantry presets                        Gemini auto-detects items
+         │                                                 │
+         └────────────────────────┬────────────────────────┘
+                                  ▼
+                     [Smart Virtual Fridge Storage]
+                     Items saved to your fridge panel
+                                  │
+                                  ▼
+                   [Find Recipes & Apply Filters]
+                   Halal, Vegan, GF + Sort by match %
+                                  │
+                                  ▼
+                   [View Recipe & Macro Breakdown]
+                   Calories, protein, ingredients list
+                                  │
+                                  ▼
+                   [Hands-Free Cook Mode (Audio)]
+                   Step-by-step voice guidance & timer
 ```
 
-**Current Deployment:** https://bitesize-recipe-finder.vercel.app
+---
+
+### 1. Ingredient Discovery & Smart Autocomplete
+**Purpose:** Quickly tell BiteSize what food items or leftovers you have in your kitchen.
+
+1. Locate the **"My Ingredients"** card in the left sidebar.
+2. In the input box (*e.g., "Tomato, Garlic, Eggs..."*), begin typing the name of an item.
+3. An **Autocomplete Dropdown** will appear with instant suggestions.
+4. Press **Enter**, click the suggestion, or click the **"Add"** button.
+5. The ingredient appears as an active interactive chip.
+6. **Quick Pantry Presets:** Click any of the one-tap pantry chips (Egg, Onion, Green Chili, Potato, Chicken, Beef, Mustard Oil, Rice, Masoor Dal, etc.) to add staples instantly.
+7. To remove an ingredient tag, simply click the small **"×"** icon on any chip, or click **"Clear All"**.
 
 ---
 
-## 🤝 Contributing
+### 2. AI Smart Fridge Vision Scanner (Gemini Multimodal)
+**Purpose:** Scan your actual refrigerator or pantry shelves using computer vision instead of typing.
 
-Contributions are welcome! Please:
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit changes (`git commit -m 'Add amazing feature'`)
-4. Push to branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
----
-
-## 📄 License
-
-This project is licensed under the MIT License. See LICENSE file for details.
+1. Click the **"📸 AI Snap"** button in the top navigation bar or the **"Scan"** button in the *Virtual Fridge* card.
+2. The **AI Fridge Scanner Modal** will open.
+3. Choose your input mode:
+   - **Live Camera:** Grants camera stream inside the viewfinder. Aim at your fridge shelf and click **"Capture & Scan Photo"**.
+   - **Upload Photo:** Click the upload tab to pick an existing grocery or fridge photo from your device.
+4. Watch the laser scanning animation as Google Gemini analyzes the visual scene.
+5. Detected ingredients appear under **"Recognized Ingredients"** with confidence tags.
+6. Click **"Save Items to My Virtual Fridge"** to automatically import all detected items into your inventory!
 
 ---
 
-## 🙋 Support
+### 3. Virtual Fridge Inventory Management
+**Purpose:** Keep a persistent digital twin of your refrigerator on your device.
 
-For issues, feature requests, or questions:
-- Open a GitHub Issue
-- Check existing issues first
-- Provide detailed reproduction steps
-
----
-
-## 📚 Additional Resources
-
-- [Spoonacular API Documentation](https://spoonacular.com/food-api)
-- [Express.js Documentation](https://expressjs.com/)
-- [Design System (Design.md)](Design.md)
-- [Material 3 Design](https://m3.material.io/)
-- [Vercel Documentation](https://vercel.com/docs)
+1. View the **"My Virtual Fridge"** widget in the sidebar.
+2. Items scanned from the camera or manually entered via `+ Add fridge item` are stored here.
+3. Click the **"🍳 Cook Now with Fridge Items"** button at any time.
+4. BiteSize will instantly populate your active search with everything currently inside your fridge and query recipes that use the highest proportion of your stored food.
 
 ---
 
-**Built with ❤️ to reduce food waste and inspire home cooking.**
+### 4. Dietary Preferences & Intelligent Sorting
+**Purpose:** Tailor meal suggestions to dietary lifestyle and nutritional goals.
+
+1. **Dietary Checkboxes:** Check any combination of preferences:
+   - ☪️ **Halal:** Filters for certified halal proteins and preparations.
+   - 🌱 **Vegetarian:** Meat-free recipes.
+   - 🥬 **Vegan:** 100% plant-based recipes without dairy or eggs.
+   - 🌾 **Gluten-Free:** Recipes free from wheat, gluten, or barley.
+2. Click **"🍳 Find Recipes Now"**.
+3. **Sorting Options:** Use the sort dropdown at the top right of the recipe canvas:
+   - **Most Ingredients Matched:** Puts recipes where you own the highest % of ingredients first (minimizes food waste).
+   - **Fastest Preparation Time:** Puts 15–20 minute quick meals first.
+   - **Lowest Calories:** Sorts by lightest caloric footprint for health-conscious users.
+
+---
+
+### 5. Recipe Details, Macros & Shopping List
+**Purpose:** Inspect full recipe guidelines, cooking times, and nutritional breakdowns.
+
+1. Click on any recipe card in the results grid.
+2. The **Recipe Details Full Modal** opens with high-resolution imagery and badges.
+3. Review the **Nutritional Breakdown Bar:**
+   - Total Calories (kcal), Protein (g), Carbohydrates (g), and Healthy Fats (g).
+4. Review the **Ingredients Checklist:**
+   - Green items represent ingredients you already have.
+   - Missed items represent what you need from the grocery store.
+   - Click **"📋 Copy List"** to copy the missing ingredients directly to your clipboard for easy grocery shopping.
+
+---
+
+### 6. Hands-Free Cook Mode (Audio Narration & Smart Timer)
+**Purpose:** Cook comfortably without touching your screen with messy, floury, or wet hands.
+
+1. Inside any open recipe modal, click **"👨‍🍳 Start Cook Mode (Hands-Free)"**.
+2. The application enters the high-contrast, distraction-free **Cook Mode Overlay**.
+3. **Audio Voice Assistant:**
+   - Click **"🔊 Read Step Aloud"** (or press the **Spacebar**) to have the digital chef narrate the step.
+   - Adjust playback speed (0.8x, 1.0x, 1.2x) or select voice accent.
+   - Toggle **"Auto-read step change"** for seamless hands-free progression.
+4. **Smart Cooking Timer Widget:**
+   - BiteSize automatically detects time expressions in the instruction (e.g., *"Simmer on low heat for 15 minutes"*).
+   - The timer automatically presets itself to the detected duration.
+   - Click **Start (▶)**, **Pause (⏸)**, or add extra time with **+1m** and **+5m** buttons. An audio chime rings upon completion.
+5. **Keyboard Navigation:**
+   - Press **`→` (Right Arrow)** to go to the next step.
+   - Press **`←` (Left Arrow)** to revisit previous steps.
+   - Press **`Spacebar`** to pause/resume voice reading.
+   - Press **`Esc`** to exit Cook Mode.
+
+---
+
+### 7. User Authentication & Cloud Synchronization
+**Purpose:** Save favorite dishes and synchronize your pantry inventory across multiple devices.
+
+1. Click **"👤 Sign In"** in the top navigation bar.
+2. In the modal, enter your email and password, or toggle to **"Don't have an account? Sign up"**.
+3. Fill in your display name and register.
+4. **Email Verification & Password Reset:**
+   - Verification emails can be resent directly from the profile screen.
+   - Forgot your password? Click **"Forgot password?"** to receive a secure Firebase reset link.
+5. **Saving Recipes:**
+   - Click the heart icon (❤️) on any recipe card or modal.
+   - Click **"❤️ Saved"** in the top navigation to view your collection.
+   - Your saved recipes automatically sync with the cloud.
+6. **Account Management:**
+   - Click your profile avatar to view user details, update your display name, change your password, or permanently delete your account with confirmation.
+
+---
+
+## 🏗️ System Architecture & Data Flow
+
+```
+┌────────────────────────────────────────────────────────────────────────┐
+│                        CLIENT BROWSER (SPA)                            │
+│   HTML5 Canvas • Tailwind CSS / Stitch Tokens • ES6 Modular JS         │
+└───────────────────┬────────────────────────────────┬───────────────────┘
+                    │                                │
+          User Actions / REST APIs             Camera / Canvas Stream
+                    │                                │
+                    ▼                                ▼
+┌────────────────────────────────────────────────────────────────────────┐
+│                     EXPRESS.JS PROXY SERVER (Node.js)                  │
+│                                                                        │
+│   ┌────────────────────────────────────────────────────────────────┐   │
+│   │ Middleware Layer:                                              │   │
+│   │ • express-rate-limit (Auth, Search, API limits)                │   │
+│   │ • CORS cross-origin configuration                              │   │
+│   │ • Body parsers (JSON & URL-encoded up to 10MB)                 │   │
+│   │ • Static assets server (public/)                               │   │
+│   └────────────────────────────────────────────────────────────────┘   │
+│                                                                        │
+│   ┌───────────────────┬───────────────────┬────────────────────────┐   │
+│   │  Auth Services    │ Recipe Controller │ AI Vision Controller   │   │
+│   │  (Firebase Auth)  │ (Spoonacular)     │ (Google Gemini Vision) │   │
+│   └─────────┬─────────┴─────────┬─────────┴────────────┬───────────┘   │
+└─────────────┼───────────────────┼──────────────────────┼───────────────┘
+              │                   │                      │
+              ▼                   ▼                      ▼
+     ┌─────────────────┐ ┌─────────────────┐  ┌─────────────────────┐
+     │  Firebase Auth  │ │ Spoonacular API │  │ Google Gemini API   │
+     │  Cloud Engine   │ │ (or Mock Data)  │  │ (or Mock AI Vision) │
+     └─────────────────┘ └─────────────────┘  └─────────────────────┘
+```
+
+---
+
+## 📡 API Endpoints & Security Specifications
+
+All backend endpoints are hosted securely on `/api/*` and guarded by **express-rate-limit** to prevent abuse:
+
+| HTTP Method | Route | Rate Limit | Description |
+| :--- | :--- | :--- | :--- |
+| `GET` | `/api/recipes/search` | 40 req / min | Searches recipes matching query `ingredients` parameter |
+| `GET` | `/api/recipes/:id/information` | 40 req / min | Retrieves complete recipe details, nutrition, and steps |
+| `GET` | `/api/ingredients/autocomplete` | 120 req / min | Fast ingredient autocomplete based on search query |
+| `POST` | `/api/vision/scan-fridge` | 120 req / min | Accepts base64 image data and runs Gemini Vision scan |
+| `GET` | `/api/tts` | 40 req / min | Audio voice synthesis stream (ElevenLabs / Web Speech) |
+| `POST` | `/api/auth/signup` | 10 req / 15 min | Secure user registration via Firebase Identity Platform |
+| `POST` | `/api/auth/signin` | 10 req / 15 min | User authentication returning ID token & refresh token |
+| `POST` | `/api/auth/forgot-password` | 10 req / 15 min | Sends password reset email to user |
+| `POST` | `/api/auth/update-profile` | 15 req / 15 min | Updates display name or password (requires current pass) |
+| `POST` | `/api/auth/delete-account` | 15 req / 15 min | Permanently removes user account from Firebase Auth |
+| `GET` | `/api/user/saved-recipes` | 120 req / min | Fetches user's bookmarked recipes |
+| `POST` | `/api/user/saved-recipes` | 120 req / min | Syncs / saves a recipe to user profile |
+
+---
+
+## 📁 Project Directory Structure
+
+```text
+bitesize-recipe-finder/
+├── .env.example              # Template for environment variables
+├── .gitignore                # Git exclusion specifications
+├── package.json              # Project dependencies, scripts, and engine specs
+├── package-lock.json         # Pinned dependency tree
+├── server.js                 # Express application, API routes, rate-limits & mock datasets
+├── vercel.json               # Serverless deployment configuration for Vercel
+├── Design.md                 # UI/UX design specifications & Stitch design tokens
+├── README.md                 # Complete project documentation & user manual (This file)
+└── public/                   # Static frontend client files
+    ├── index.html            # Main semantic HTML5 markup & dialog structures
+    ├── style.css             # Stitch Material 3 design tokens & animations
+    └── app.js                # Core frontend controller (State, Auth, Speech, AI Vision)
+```
+
+---
+
+## 📊 Presentation Checklist (Course Evaluation)
+
+> [!IMPORTANT]
+> **Faculty Evaluation Requirement (Carries 10% Mark):**
+> 
+> When presenting this project in class, ensure the **very last slide** of your presentation includes the following verified links:
+> 
+> 1. **GitHub Repository Link:**  
+>    `https://github.com/zionabdullah/bitesize-recipe-finder`
+> 2. **Live Deployed Website Link:**  
+>    `https://bitesize-recipe-finder.vercel.app`
+> 
+> *(Tip: Include a QR code on the final slide linking directly to the live Vercel URL for audience members and faculty to open on their smartphones!)*
+
+---
+
+## 📄 License & Acknowledgments
+
+- **License:** Open-source under the [MIT License](LICENSE).
+- **Design Framework:** Google Stitch Material 3 UI Guidelines.
+- **Recipe Data & APIs:** Powered by Spoonacular API and Google Gemini Vision.
+- **Fonts & Icons:** Google Fonts (Inter) and native UI emojis.
+
+---
+
+<div align="center">
+  <b>Built with ❤️ to inspire sustainable home cooking and reduce food waste.</b><br>
+  <sub>BiteSize v2.0 • Created by Zion Abdullah & Team Incrip Pyre</sub>
+</div>
