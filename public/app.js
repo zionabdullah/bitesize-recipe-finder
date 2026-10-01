@@ -1702,21 +1702,23 @@ function startApp() {
       const data = await res.json();
       scanningOverlay.classList.add('hidden');
 
-      if (data.ingredients && Array.isArray(data.ingredients)) {
+      if (data.error) {
+        throw new Error(data.error);
+      } else if (data.ingredients && Array.isArray(data.ingredients)) {
         state.detectedIngredients = data.ingredients;
         renderDetectedChips();
         snapResultsContainer.classList.remove('hidden');
         captureSnapBtn.classList.add('hidden');
         showToast(`AI Detected ${data.ingredients.length} items in your fridge! ✨`, 'success');
       } else {
-        throw new Error('No ingredients detected');
+        throw new Error('Could not analyze photo. Please try another clear picture.');
       }
     } catch (err) {
       console.error('Vision scan error:', err);
       scanningOverlay.classList.add('hidden');
       captureSnapBtn.disabled = false;
       captureSnapBtn.innerHTML = `<span>📸</span> Try Scanning Again`;
-      showToast('Could not analyze photo. Please try another clear picture.', 'error');
+      showToast(err.message || 'Could not analyze photo. Please try another clear picture.', 'error');
     }
   }
 
