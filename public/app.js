@@ -416,8 +416,10 @@ function startApp() {
     if (captureSnapBtn) captureSnapBtn.addEventListener('click', handleCaptureAndScan);
     if (retakeSnapBtn) retakeSnapBtn.addEventListener('click', resetSnapModalState);
     if (importToFridgeBtn) importToFridgeBtn.addEventListener('click', importDetectedToVirtualFridge);
-    if (uploadDropzone) uploadDropzone.addEventListener('click', () => fridgeFileInput.click());
-    if (fridgeFileInput) fridgeFileInput.addEventListener('change', handleFileUpload);
+    if (fridgeFileInput) {
+      fridgeFileInput.addEventListener('click', (e) => { e.target.value = ''; });
+      fridgeFileInput.addEventListener('change', handleFileUpload);
+    }
     if (fridgeAddBtn) fridgeAddBtn.addEventListener('click', handleAddVirtualFridgeInput);
     if (fridgeAddInput) {
       fridgeAddInput.addEventListener('keydown', (e) => {
@@ -1546,7 +1548,7 @@ function startApp() {
       } else {
         snapPreviewImg.classList.add('hidden');
         uploadDropzone.classList.remove('hidden');
-        captureSnapBtn.innerHTML = `<span>📁</span> Select / Take Photo`;
+        captureSnapBtn.innerHTML = `<span>📁</span> Upload`;
       }
     }
   }
@@ -1608,6 +1610,7 @@ function startApp() {
 
   function resetSnapModalState() {
     state.currentCapturedBase64 = null;
+    if (fridgeFileInput) fridgeFileInput.value = '';
     snapPreviewImg.src = '';
     snapPreviewImg.classList.add('hidden');
     snapResultsContainer.classList.add('hidden');
@@ -1622,7 +1625,7 @@ function startApp() {
       uploadDropzone.classList.add('hidden');
       startCamera();
     } else {
-      captureSnapBtn.innerHTML = `<span>📁</span> Select / Take Photo`;
+      captureSnapBtn.innerHTML = `<span>📁</span> Upload`;
       cameraStreamVideo.classList.add('hidden');
       uploadDropzone.classList.remove('hidden');
     }
@@ -1676,7 +1679,10 @@ function startApp() {
       cameraStreamVideo.classList.add('hidden');
       snapPreviewImg.classList.remove('hidden');
     } else if (!base64Image) {
-      if (fridgeFileInput) fridgeFileInput.click();
+      if (fridgeFileInput) {
+        fridgeFileInput.value = '';
+        fridgeFileInput.click();
+      }
       return;
     }
 
@@ -2000,6 +2006,31 @@ function startApp() {
     } catch (e) {
       console.warn('Audio Context chime error:', e);
     }
+  }
+
+  // -------------------------------------------------------------------
+  // 15. UTILITIES
+  // -------------------------------------------------------------------
+
+  function showToast(message, type = 'info') {
+    if (!toastContainer) return;
+    
+    const toast = document.createElement('div');
+    toast.className = 'toast';
+
+    let icon = 'ℹ️';
+    if (type === 'success') icon = '✅';
+    if (type === 'error') icon = '❌';
+
+    toast.innerHTML = `<span>${icon}</span><span>${message}</span>`;
+    toastContainer.appendChild(toast);
+
+    setTimeout(() => {
+      toast.style.opacity = '0';
+      toast.style.transform = 'translateY(10px)';
+      toast.style.transition = 'all 300ms ease';
+      setTimeout(() => toast.remove(), 300);
+    }, 3000);
   }
 
   // Run app

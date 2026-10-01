@@ -1273,8 +1273,8 @@ app.post('/api/vision/scan-fridge', apiGeneralLimiter, async (req, res) => {
       const mimeType = mimeTypeMatch ? mimeTypeMatch[1] : 'image/jpeg';
       const base64Data = image.replace(/^data:image\/\w+;base64,/, '');
 
-      // Using gemini-1.5-flash for fast multimodal vision recognition
-      const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`;
+      // Using gemini-3.6-flash for fast multimodal vision recognition
+      const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${GEMINI_API_KEY}`;
       
       const payload = {
         contents: [
@@ -1294,13 +1294,28 @@ app.post('/api/vision/scan-fridge', apiGeneralLimiter, async (req, res) => {
         ]
       };
 
-      const geminiRes = await fetch(geminiUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
+      let attempts = 0;
+      let geminiRes;
+      
+      while (attempts < 3) {
+        geminiRes = await fetch(geminiUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        
+        if (geminiRes.ok) break;
+        
+        if (geminiRes.status === 503) {
+          attempts++;
+          console.warn(`[Gemini Vision] 503 Overloaded (Attempt ${attempts}/3). Retrying in 1.5s...`);
+          await new Promise(r => setTimeout(r, 1500));
+        } else {
+          break; // Don't retry on 400, 404, etc.
+        }
+      }
 
-      if (geminiRes.ok) {
+      if (geminiRes && geminiRes.ok) {
         const geminiData = await geminiRes.json();
         const parts = geminiData?.candidates?.[0]?.content?.parts || [];
         const responseText = parts.map(p => p.text || '').filter(Boolean).join('\n');
@@ -1309,27 +1324,39 @@ app.post('/api/vision/scan-fridge', apiGeneralLimiter, async (req, res) => {
         // Extract array using regex matching [...]
         const arrayMatch = responseText.match(/\[[\s\S]*\]/);
         if (arrayMatch) {
-          const parsedIngredients = JSON.parse(arrayMatch[0]);
+          try {
+            const parsedIngredients = JSON.parse(arrayMatch[0]);
 
-          if (Array.isArray(parsedIngredients)) {
-            console.log(`[Gemini Vision] Successfully detected ${parsedIngredients.length} ingredients:`, parsedIngredients);
-            return res.json({
-              source: 'gemini-vision',
-              ingredients: parsedIngredients.map(i => String(i).toLowerCase().trim())
-            });
+            if (Array.isArray(parsedIngredients)) {
+              console.log(`[Gemini Vision] Successfully detected ${parsedIngredients.length} ingredients:`, parsedIngredients);
+              return res.json({
+                source: 'gemini-vision',
+                ingredients: parsedIngredients.map(i => String(i).toLowerCase().trim())
+              });
+            }
+          } catch (e) {
+            console.warn(`[Gemini Vision] Failed to parse array: ${e.message}`);
           }
         }
+        
+        // If Gemini succeeds but doesn't return an array, it means no food was detected.
+        console.log(`[Gemini Vision] No valid array found. Assuming 0 ingredients.`);
+        return res.json({
+          source: 'gemini-vision',
+          ingredients: []
+        });
       } else {
-        const errText = await geminiRes.text();
-        console.warn(`[Gemini Vision Warning] Status ${geminiRes.status}: ${errText}`);
+        const errText = await geminiRes?.text() || 'No response';
+        console.warn(`[Gemini Vision Warning] Status ${geminiRes?.status}: ${errText}`);
+        return res.status(503).json({ error: 'Gemini AI is currently overloaded or unavailable. Please try again later.' });
       }
     } catch (err) {
       console.error(`[Gemini Vision Error] ${err.message}`);
+      return res.status(500).json({ error: 'Failed to contact Gemini AI.' });
     }
-  }
-
-  // Fallback: Smart Vision Simulator (Demo Mode)
-  // Generates realistic fridge scanning results with confidence scores
+  } else {
+    // ONLY Fallback to Smart Vision Simulator (Demo Mode) if NO API KEY is provided.
+    // Generates realistic fridge scanning results with confidence scores
   const samplePresets = [
     ['tomato', 'eggs', 'garlic', 'chicken', 'milk', 'cheese', 'butter'],
     ['onion', 'pasta', 'tomato', 'olive oil', 'bell pepper', 'garlic'],
@@ -1348,6 +1375,7 @@ app.post('/api/vision/scan-fridge', apiGeneralLimiter, async (req, res) => {
     message: GEMINI_API_KEY ? 'Gemini API call failed, using Vision Simulator.' : 'Operating in demo mode. AI Vision Scanner active!',
     ingredients: selectedSet
   });
+  }
 });
 
 // Start Server locally or export for Serverless (Vercel)
