@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
+const rateLimit = require('express-rate-limit');
 require('dotenv').config();
 
 const app = express();
@@ -14,6 +15,53 @@ const FIREBASE_PROJECT_ID = process.env.FIREBASE_PROJECT_ID || '';
 app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
+
+// -------------------------------------------------------------------
+// RATE LIMITING
+// Note: express-rate-limit uses an in-memory store by default.
+// On Vercel or other serverless platforms, each invocation may spin up a
+// fresh instance, resetting the counter. For true global rate limiting in
+// a production multi-instance deployment, use a store like rate-limit-redis.
+// -------------------------------------------------------------------
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  limit: 10,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  message: { error: 'Too many auth requests from this IP, please try again after 15 minutes.' }
+});
+
+const refreshLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  limit: 20,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  message: { error: 'Too many refresh requests, please try again later.' }
+});
+
+const userAccountLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  limit: 15,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  message: { error: 'Too many account update requests, please try again later.' }
+});
+
+const recipeSearchLimiter = rateLimit({
+  windowMs: 1 * 60 * 1000, // 1 minute
+  limit: 40,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  message: { error: 'Too many search requests, please try again later.' }
+});
+
+const apiGeneralLimiter = rateLimit({
+  windowMs: 1 * 60 * 1000, // 1 minute
+  limit: 120,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  message: { error: 'Too many requests, please try again later.' }
+});
 
 // -------------------------------------------------------------------
 // RICH FALLBACK MOCK DATASET
@@ -582,7 +630,7 @@ async function deleteFirestoreUser(uid) {
 // -------------------------------------------------------------------
 
 // 1. Sign Up
-app.post('/api/auth/signup', async (req, res) => {
+app.post('/api/auth/signup', authLimiter, async (req, res) => {
   const { email, password, name, savedRecipes } = req.body;
   if (!email || !password) {
     return res.status(400).json({ error: 'Email and password are required.' });
@@ -655,7 +703,7 @@ app.post('/api/auth/signup', async (req, res) => {
 });
 
 // 2. Sign In
-app.post('/api/auth/signin', async (req, res) => {
+app.post('/api/auth/signin', authLimiter, async (req, res) => {
   const { email, password } = req.body;
   if (!email || !password) {
     return res.status(400).json({ error: 'Email and password are required.' });
@@ -725,8 +773,41 @@ app.post('/api/auth/signin', async (req, res) => {
   }
 });
 
+// 2.5 Token Refresh
+app.post('/api/auth/refresh', refreshLimiter, async (req, res) => {
+  const { refreshToken } = req.body;
+  if (!refreshToken) {
+    return res.status(400).json({ error: 'Refresh token is required.' });
+  }
+
+  try {
+    const refreshRes = await fetch(`https://securetoken.googleapis.com/v1/token?key=${FIREBASE_API_KEY}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: `grant_type=refresh_token&refresh_token=${refreshToken}`
+    });
+
+    const data = await refreshRes.json();
+    if (!refreshRes.ok) {
+      console.warn('[Token Refresh Failed]', data);
+      return res.status(401).json({ error: 'TOKEN_REVOKED' });
+    }
+
+    res.json({
+      success: true,
+      token: data.id_token,
+      refreshToken: data.refresh_token,
+      expiresIn: data.expires_in,
+      userId: data.user_id
+    });
+  } catch (err) {
+    console.error('[Token Refresh Error]', err);
+    res.status(500).json({ error: 'Internal server error during token refresh.' });
+  }
+});
+
 // 3. Forgot Password
-app.post('/api/auth/forgot-password', async (req, res) => {
+app.post('/api/auth/forgot-password', authLimiter, async (req, res) => {
   const { email } = req.body;
   if (!email) {
     return res.status(400).json({ error: 'Email address is required.' });
@@ -752,7 +833,7 @@ app.post('/api/auth/forgot-password', async (req, res) => {
 });
 
 // 4. Resend Verification Email
-app.post('/api/auth/send-verification', async (req, res) => {
+app.post('/api/auth/send-verification', authLimiter, async (req, res) => {
   const authUser = await verifyIdToken(req);
   if (!authUser) {
     return res.status(401).json({ error: 'Unauthorized. Please sign in.' });
@@ -778,7 +859,7 @@ app.post('/api/auth/send-verification', async (req, res) => {
 });
 
 // 5. Get Current User Profile & Sync
-app.get('/api/auth/me', async (req, res) => {
+app.get('/api/auth/me', apiGeneralLimiter, async (req, res) => {
   const authUser = await verifyIdToken(req);
   if (!authUser) {
     return res.status(401).json({ error: 'Unauthorized.' });
@@ -798,7 +879,7 @@ app.get('/api/auth/me', async (req, res) => {
 });
 
 // 6. Update Profile (Name and/or Password)
-app.post('/api/auth/update-profile', async (req, res) => {
+app.post('/api/auth/update-profile', userAccountLimiter, async (req, res) => {
   const authUser = await verifyIdToken(req);
   if (!authUser) {
     return res.status(401).json({ error: 'Unauthorized. Please log in again.' });
@@ -863,7 +944,7 @@ app.post('/api/auth/update-profile', async (req, res) => {
 });
 
 // 7. Permanently Delete Account
-app.post('/api/auth/delete-account', async (req, res) => {
+app.post('/api/auth/delete-account', userAccountLimiter, async (req, res) => {
   const authUser = await verifyIdToken(req);
   if (!authUser) {
     return res.status(401).json({ error: 'Unauthorized.' });
@@ -907,7 +988,7 @@ app.post('/api/auth/delete-account', async (req, res) => {
 });
 
 // 8. User Saved Recipes (Sync & Get)
-app.get('/api/user/saved-recipes', async (req, res) => {
+app.get('/api/user/saved-recipes', apiGeneralLimiter, async (req, res) => {
   const authUser = await verifyIdToken(req);
   if (!authUser) {
     return res.status(401).json({ error: 'Unauthorized.' });
@@ -920,7 +1001,7 @@ app.get('/api/user/saved-recipes', async (req, res) => {
   });
 });
 
-app.post('/api/user/saved-recipes', async (req, res) => {
+app.post('/api/user/saved-recipes', apiGeneralLimiter, async (req, res) => {
   const authUser = await verifyIdToken(req);
   if (!authUser) {
     return res.status(401).json({ error: 'Unauthorized.' });
@@ -943,7 +1024,7 @@ app.post('/api/user/saved-recipes', async (req, res) => {
 });
 
 // 1. Search Recipes by Ingredients (Spoonacular API + Free Live Recipe API + Mock Fallback)
-app.get('/api/recipes/search', async (req, res) => {
+app.get('/api/recipes/search', recipeSearchLimiter, async (req, res) => {
   const { ingredients } = req.query;
 
   if (!ingredients) {
@@ -994,7 +1075,7 @@ app.get('/api/recipes/search', async (req, res) => {
 });
 
 // 2. Get Detailed Recipe Information by ID
-app.get('/api/recipes/:id/information', async (req, res) => {
+app.get('/api/recipes/:id/information', recipeSearchLimiter, async (req, res) => {
   const recipeId = parseInt(req.params.id, 10);
   console.log(`[API Proxy] Fetching information for recipe ID: ${recipeId}`);
 
@@ -1070,7 +1151,7 @@ app.get('/api/recipes/:id/information', async (req, res) => {
 });
 
 // 3. Autocomplete Ingredients
-app.get('/api/ingredients/autocomplete', async (req, res) => {
+app.get('/api/ingredients/autocomplete', apiGeneralLimiter, async (req, res) => {
   const { query } = req.query;
   if (!query) return res.json([]);
 
@@ -1095,7 +1176,7 @@ app.get('/api/ingredients/autocomplete', async (req, res) => {
 });
 
 // 4. Text-to-Speech (TTS) Proxy Endpoint (ElevenLabs AI Female Voice + Free Fallback)
-app.get('/api/tts', async (req, res) => {
+app.get('/api/tts', recipeSearchLimiter, async (req, res) => {
   const { text } = req.query;
 
   if (!text) {

@@ -3,15 +3,25 @@
 // Secure: Zero Firebase credentials or SDKs imported on the client.
 // ===================================================================
 const authApi = {
+  _isRefreshing: false,
+  _refreshQueue: [],
+
   getToken() {
     return localStorage.getItem('bitesize_auth_token') || null;
   },
-  setSession(user, token) {
+  // Note: For a portfolio app, localStorage is acceptable for refresh tokens.
+  // In a high-security production app, use an HttpOnly cookie.
+  getRefreshToken() {
+    return localStorage.getItem('bitesize_auth_refresh_token') || null;
+  },
+  setSession(user, token, refreshToken) {
     if (token) localStorage.setItem('bitesize_auth_token', token);
+    if (refreshToken) localStorage.setItem('bitesize_auth_refresh_token', refreshToken);
     if (user) localStorage.setItem('bitesize_auth_user', JSON.stringify(user));
   },
   clearSession() {
     localStorage.removeItem('bitesize_auth_token');
+    localStorage.removeItem('bitesize_auth_refresh_token');
     localStorage.removeItem('bitesize_auth_user');
   },
   getCachedUser() {
@@ -22,14 +32,77 @@ const authApi = {
       return null;
     }
   },
-  async request(endpoint, options = {}) {
+  async doTokenRefresh() {
+    const refreshToken = this.getRefreshToken();
+    if (!refreshToken) throw new Error('No refresh token available');
+
+    const res = await fetch('/api/auth/refresh', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refreshToken })
+    });
+    
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(data.error || 'Refresh failed');
+    }
+    
+    this.setSession(null, data.token, data.refreshToken);
+    return data.token;
+  },
+  async request(endpoint, options = {}, isRetry = false) {
     const token = this.getToken();
     const headers = {
       'Content-Type': 'application/json',
       ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
       ...(options.headers || {})
     };
+    
     const res = await fetch(endpoint, { ...options, headers });
+    
+    // Automatic 401 Interceptor and Refresh
+    if (res.status === 401 && !isRetry) {
+      const refreshToken = this.getRefreshToken();
+      if (refreshToken) {
+        if (!this._isRefreshing) {
+          this._isRefreshing = true;
+          try {
+            const newToken = await this.doTokenRefresh();
+            this._isRefreshing = false;
+            this._refreshQueue.forEach(cb => cb(newToken));
+            this._refreshQueue = [];
+            
+            // Retry the original request
+            options.headers = { ...options.headers, 'Authorization': `Bearer ${newToken}` };
+            return await this.request(endpoint, options, true);
+          } catch (err) {
+            this._isRefreshing = false;
+            this._refreshQueue.forEach(cb => cb(null));
+            this._refreshQueue = [];
+            this.clearSession();
+            // Dispatch a custom event to update the UI
+            window.dispatchEvent(new CustomEvent('session_expired'));
+            throw err;
+          }
+        } else {
+          // Wait for the ongoing refresh to complete
+          return new Promise((resolve, reject) => {
+            this._refreshQueue.push((newToken) => {
+              if (newToken) {
+                options.headers = { ...options.headers, 'Authorization': `Bearer ${newToken}` };
+                resolve(this.request(endpoint, options, true));
+              } else {
+                reject(new Error('Session expired'));
+              }
+            });
+          });
+        }
+      } else {
+        this.clearSession();
+        window.dispatchEvent(new CustomEvent('session_expired'));
+      }
+    }
+
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
       throw new Error(data.error || `Request failed with status ${res.status}`);
@@ -41,7 +114,7 @@ const authApi = {
       method: 'POST',
       body: JSON.stringify({ email, password, name, savedRecipes })
     });
-    this.setSession(data.user, data.token);
+    this.setSession(data.user, data.token, data.refreshToken);
     return data;
   },
   async signIn(email, password) {
@@ -49,14 +122,14 @@ const authApi = {
       method: 'POST',
       body: JSON.stringify({ email, password })
     });
-    this.setSession(data.user, data.token);
+    this.setSession(data.user, data.token, data.refreshToken);
     return data;
   },
   async getMe() {
     const data = await this.request('/api/auth/me');
     if (data.user) {
-      const token = this.getToken();
-      this.setSession(data.user, token);
+      // Don't overwrite the refresh token here if it's not returned
+      this.setSession(data.user, this.getToken(), this.getRefreshToken());
     }
     return data;
   },
@@ -77,7 +150,7 @@ const authApi = {
       body: JSON.stringify({ name, currentPassword, newPassword })
     });
     if (data.token) {
-      this.setSession(data.user, data.token);
+      this.setSession(data.user, data.token, data.refreshToken);
     }
     return data;
   },
@@ -258,6 +331,14 @@ function startApp() {
     syncPresetTags();
     // Auto-fetch default initial demo recipe set for rich initial experience
     fetchRecipes();
+
+    // Listen for session expiry from authApi
+    window.addEventListener('session_expired', () => {
+      state.user = null;
+      updateUserDisplay();
+      showToast('Session expired, please sign in again.', 'error');
+      closeProfileModal();
+    });
 
     // Restore and validate session from BFF service
     const cachedUser = authApi.getCachedUser();
@@ -492,7 +573,8 @@ function startApp() {
             if (state.activeTab === 'saved') renderSavedRecipesGrid();
             else renderCurrentRecipesGrid();
           }
-          showToast(`Welcome back, ${state.user.name}! 🚀`, 'success');
+          const n = state.user.name || state.user.displayName || 'User';
+          showToast(`Welcome back, ${n}! 🚀`, 'success');
         } else {
           const res = await authApi.signUp(email, password, name, state.savedRecipes);
           state.user = res.user;
@@ -1157,16 +1239,18 @@ function startApp() {
 
   function closeAuthModal() {
     authModalBackdrop.classList.remove('open');
+    if (authForm) authForm.reset();
   }
 
   function openProfileModal() {
     if (!state.user) return;
-    if (profileNameInput) profileNameInput.value = state.user.name || '';
+    const name = state.user.name || state.user.displayName || 'User';
+    if (profileNameInput) profileNameInput.value = name;
     if (profilePasswordInput) profilePasswordInput.value = '';
     if (profileCurrentPasswordInput) profileCurrentPasswordInput.value = '';
-    if (profileModalName) profileModalName.textContent = state.user.name || '';
+    if (profileModalName) profileModalName.textContent = name;
     if (profileModalEmail) profileModalEmail.textContent = state.user.email || '';
-    if (profileAvatarLetter) profileAvatarLetter.textContent = state.user.name ? state.user.name.charAt(0).toUpperCase() : '👤';
+    if (profileAvatarLetter) profileAvatarLetter.textContent = name.charAt(0).toUpperCase();
     if (profileErrorMessage) profileErrorMessage.classList.add('hidden');
     if (profileSuccessMessage) profileSuccessMessage.classList.add('hidden');
     if (profileVerificationBanner) {
@@ -1191,9 +1275,10 @@ function startApp() {
 
   function updateUserDisplay() {
     if (state.user && state.user.uid) {
-      userDisplayName.textContent = state.user.name;
+      const name = state.user.name || state.user.displayName || 'User';
+      userDisplayName.textContent = name;
       if (headerAvatarLetter) {
-        headerAvatarLetter.textContent = state.user.name.charAt(0).toUpperCase();
+        headerAvatarLetter.textContent = name.charAt(0).toUpperCase();
         headerAvatarLetter.className = 'w-6 h-6 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold text-xs';
       }
     } else {
