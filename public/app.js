@@ -1,20 +1,184 @@
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.4.0/firebase-app.js";
-import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged, updatePassword, sendPasswordResetEmail, sendEmailVerification, deleteUser, GoogleAuthProvider, signInWithPopup, EmailAuthProvider, reauthenticateWithCredential, reauthenticateWithPopup } from "https://www.gstatic.com/firebasejs/10.4.0/firebase-auth.js";
-import { getFirestore, doc, setDoc, getDoc, deleteDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.4.0/firebase-firestore.js";
+// ===================================================================
+// BITESIZE CLIENT AUTH & DATA SERVICE (BFF API Client)
+// Secure: Zero Firebase credentials or SDKs imported on the client.
+// ===================================================================
+const authApi = {
+  _isRefreshing: false,
+  _refreshQueue: [],
 
-// Fetch Firebase config dynamically from server environment variables (.env)
-const configRes = await fetch('/api/firebase-config');
-const firebaseConfig = await configRes.json();
+  getToken() {
+    return localStorage.getItem('bitesize_auth_token') || null;
+  },
+  // Note: For a portfolio app, localStorage is acceptable for refresh tokens.
+  // In a high-security production app, use an HttpOnly cookie.
+  getRefreshToken() {
+    return localStorage.getItem('bitesize_auth_refresh_token') || null;
+  },
+  setSession(user, token, refreshToken) {
+    if (token) localStorage.setItem('bitesize_auth_token', token);
+    if (refreshToken) localStorage.setItem('bitesize_auth_refresh_token', refreshToken);
+    if (user) localStorage.setItem('bitesize_auth_user', JSON.stringify(user));
+  },
+  clearSession() {
+    localStorage.removeItem('bitesize_auth_token');
+    localStorage.removeItem('bitesize_auth_refresh_token');
+    localStorage.removeItem('bitesize_auth_user');
+  },
+  getCachedUser() {
+    try {
+      const u = localStorage.getItem('bitesize_auth_user');
+      return u ? JSON.parse(u) : null;
+    } catch (e) {
+      return null;
+    }
+  },
+  async doTokenRefresh() {
+    const refreshToken = this.getRefreshToken();
+    if (!refreshToken) throw new Error('No refresh token available');
 
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const db = getFirestore(app);
+    const res = await fetch('/api/auth/refresh', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refreshToken })
+    });
+    
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(data.error || 'Refresh failed');
+    }
+    
+    this.setSession(null, data.token, data.refreshToken);
+    return data.token;
+  },
+  async request(endpoint, options = {}, isRetry = false) {
+    const token = this.getToken();
+    const headers = {
+      'Content-Type': 'application/json',
+      ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+      ...(options.headers || {})
+    };
+    
+    const res = await fetch(endpoint, { ...options, headers });
+    
+    // Automatic 401 Interceptor and Refresh
+    if (res.status === 401 && !isRetry) {
+      const refreshToken = this.getRefreshToken();
+      if (refreshToken) {
+        if (!this._isRefreshing) {
+          this._isRefreshing = true;
+          try {
+            const newToken = await this.doTokenRefresh();
+            this._isRefreshing = false;
+            this._refreshQueue.forEach(cb => cb(newToken));
+            this._refreshQueue = [];
+            
+            // Retry the original request
+            options.headers = { ...options.headers, 'Authorization': `Bearer ${newToken}` };
+            return await this.request(endpoint, options, true);
+          } catch (err) {
+            this._isRefreshing = false;
+            this._refreshQueue.forEach(cb => cb(null));
+            this._refreshQueue = [];
+            this.clearSession();
+            // Dispatch a custom event to update the UI
+            window.dispatchEvent(new CustomEvent('session_expired'));
+            throw err;
+          }
+        } else {
+          // Wait for the ongoing refresh to complete
+          return new Promise((resolve, reject) => {
+            this._refreshQueue.push((newToken) => {
+              if (newToken) {
+                options.headers = { ...options.headers, 'Authorization': `Bearer ${newToken}` };
+                resolve(this.request(endpoint, options, true));
+              } else {
+                reject(new Error('Session expired'));
+              }
+            });
+          });
+        }
+      } else {
+        this.clearSession();
+        window.dispatchEvent(new CustomEvent('session_expired'));
+      }
+    }
+
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(data.error || `Request failed with status ${res.status}`);
+    }
+    return data;
+  },
+  async signUp(email, password, name, savedRecipes) {
+    const data = await this.request('/api/auth/signup', {
+      method: 'POST',
+      body: JSON.stringify({ email, password, name, savedRecipes })
+    });
+    this.setSession(data.user, data.token, data.refreshToken);
+    return data;
+  },
+  async signIn(email, password) {
+    const data = await this.request('/api/auth/signin', {
+      method: 'POST',
+      body: JSON.stringify({ email, password })
+    });
+    this.setSession(data.user, data.token, data.refreshToken);
+    return data;
+  },
+  async getMe() {
+    const data = await this.request('/api/auth/me');
+    if (data.user) {
+      // Don't overwrite the refresh token here if it's not returned
+      this.setSession(data.user, this.getToken(), this.getRefreshToken());
+    }
+    return data;
+  },
+  async forgotPassword(email) {
+    return await this.request('/api/auth/forgot-password', {
+      method: 'POST',
+      body: JSON.stringify({ email })
+    });
+  },
+  async sendVerification() {
+    return await this.request('/api/auth/send-verification', {
+      method: 'POST'
+    });
+  },
+  async updateProfile({ name, currentPassword, newPassword }) {
+    const data = await this.request('/api/auth/update-profile', {
+      method: 'POST',
+      body: JSON.stringify({ name, currentPassword, newPassword })
+    });
+    if (data.token) {
+      this.setSession(data.user, data.token, data.refreshToken);
+    }
+    return data;
+  },
+  async deleteAccount(password) {
+    const data = await this.request('/api/auth/delete-account', {
+      method: 'POST',
+      body: JSON.stringify({ password })
+    });
+    this.clearSession();
+    return data;
+  },
+  async getSavedRecipes() {
+    return await this.request('/api/user/saved-recipes');
+  },
+  async saveRecipes(savedRecipes) {
+    return await this.request('/api/user/saved-recipes', {
+      method: 'POST',
+      body: JSON.stringify({ savedRecipes })
+    });
+  }
+};
+
 
 /* ===================================================================
    BITESIZE - SMART INGREDIENT RECIPE FINDER & MEAL PLANNER (APP.JS)
    =================================================================== */
 
-document.addEventListener('DOMContentLoaded', () => {
+function startApp() {
 
   // -------------------------------------------------------------------
   // 1. APPLICATION STATE
@@ -168,49 +332,42 @@ document.addEventListener('DOMContentLoaded', () => {
     // Auto-fetch default initial demo recipe set for rich initial experience
     fetchRecipes();
 
-    // Firebase auth state listener
-    onAuthStateChanged(auth, async (user) => {
-      if (user) {
-        // Logged in — set up real-time Firestore sync for savedRecipes
-        if (window.unsubFirestore) window.unsubFirestore();
-        window.unsubFirestore = onSnapshot(doc(db, 'users', user.uid), (snap) => {
-          if (snap.exists()) {
-            const data = snap.data();
-            if (data.name) state.user = { ...state.user, name: data.name };
-            if (data.savedRecipes) {
-              state.savedRecipes = data.savedRecipes;
-              localStorage.setItem('bitesize_saved_recipes', JSON.stringify(state.savedRecipes));
-              updateSavedCountBadge();
-              if (state.activeTab === 'saved') renderSavedRecipesGrid();
-              else renderCurrentRecipesGrid();
-            }
-          } else {
-            // First login — push local savedRecipes to Firestore
-            setDoc(doc(db, 'users', user.uid), {
-              name: user.displayName || user.email.split('@')[0],
-              savedRecipes: state.savedRecipes
-            }, { merge: true });
+    // Listen for session expiry from authApi
+    window.addEventListener('session_expired', () => {
+      state.user = null;
+      updateUserDisplay();
+      showToast('Session expired, please sign in again.', 'error');
+      closeProfileModal();
+    });
+
+    // Restore and validate session from BFF service
+    const cachedUser = authApi.getCachedUser();
+    const token = authApi.getToken();
+    if (cachedUser && token) {
+      state.user = cachedUser;
+      updateUserDisplay();
+      // Silently fetch fresh user profile & saved recipes from backend
+      authApi.getMe().then(res => {
+        if (res.user) {
+          state.user = res.user;
+          if (Array.isArray(res.savedRecipes)) {
+            state.savedRecipes = res.savedRecipes;
+            localStorage.setItem('bitesize_saved_recipes', JSON.stringify(state.savedRecipes));
+            updateSavedCountBadge();
+            if (state.activeTab === 'saved') renderSavedRecipesGrid();
+            else renderCurrentRecipesGrid();
           }
           updateUserDisplay();
-        }, (e) => console.error('Firestore sync error:', e));
-
-        state.user = {
-          name: user.displayName || user.email.split('@')[0],
-          email: user.email,
-          uid: user.uid
-        };
-      } else {
-        // Logged out
-        if (window.unsubFirestore) { window.unsubFirestore(); window.unsubFirestore = null; }
+        }
+      }).catch(err => {
+        console.warn('Session expired or invalidated:', err.message);
+        authApi.clearSession();
         state.user = null;
-        state.savedRecipes = [];
-        localStorage.removeItem('bitesize_saved_recipes');
-        updateSavedCountBadge();
-        if (state.activeTab === 'saved') renderSavedRecipesGrid();
-        else renderCurrentRecipesGrid();
-      }
+        updateUserDisplay();
+      });
+    } else {
       updateUserDisplay();
-    });
+    }
     ingredientInput.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') {
         e.preventDefault();
@@ -382,36 +539,11 @@ document.addEventListener('DOMContentLoaded', () => {
           return;
         }
         try {
-          await sendPasswordResetEmail(auth, email);
+          await authApi.forgotPassword(email);
           authErrorMessage.classList.add('hidden');
           showToast('Password reset email sent!', 'success');
         } catch (err) {
-          authErrorMessage.textContent = err.message.replace('Firebase:', '').trim();
-          authErrorMessage.classList.remove('hidden');
-        }
-      });
-    }
-
-    // Google Sign-In
-    if (authGoogleBtn) {
-      authGoogleBtn.addEventListener('click', async () => {
-        authErrorMessage.classList.add('hidden');
-        try {
-          const provider = new GoogleAuthProvider();
-          const result = await signInWithPopup(auth, provider);
-          const user = result.user;
-          const docRef = doc(db, 'users', user.uid);
-          const docSnap = await getDoc(docRef);
-          if (!docSnap.exists()) {
-            await setDoc(docRef, {
-              name: user.displayName || user.email.split('@')[0],
-              savedRecipes: state.savedRecipes
-            });
-          }
-          closeAuthModal();
-          showToast('Logged in with Google! 🚀', 'success');
-        } catch (err) {
-          authErrorMessage.textContent = err.message.replace('Firebase:', '').trim();
+          authErrorMessage.textContent = err.message;
           authErrorMessage.classList.remove('hidden');
         }
       });
@@ -424,41 +556,54 @@ document.addEventListener('DOMContentLoaded', () => {
       const email = document.getElementById('auth-email-input').value.trim();
       const password = document.getElementById('auth-password-input').value.trim();
       const name = authNameInput ? authNameInput.value.trim() || 'Chef' : 'Chef';
+      const originalText = authSubmitBtn ? authSubmitBtn.textContent : 'Submit';
+      if (authSubmitBtn) {
+        authSubmitBtn.disabled = true;
+        authSubmitBtn.textContent = 'Please wait...';
+      }
+
       try {
         if (authMode === 'signin') {
-          await signInWithEmailAndPassword(auth, email, password);
-          showToast('Logged in successfully! 🚀', 'success');
+          const res = await authApi.signIn(email, password);
+          state.user = res.user;
+          if (Array.isArray(res.savedRecipes)) {
+            state.savedRecipes = res.savedRecipes;
+            localStorage.setItem('bitesize_saved_recipes', JSON.stringify(state.savedRecipes));
+            updateSavedCountBadge();
+            if (state.activeTab === 'saved') renderSavedRecipesGrid();
+            else renderCurrentRecipesGrid();
+          }
+          const n = state.user.name || state.user.displayName || 'User';
+          showToast(`Welcome back, ${n}! 🚀`, 'success');
         } else {
-          const cred = await createUserWithEmailAndPassword(auth, email, password);
-          await setDoc(doc(db, 'users', cred.user.uid), {
-            name,
-            savedRecipes: state.savedRecipes
-          }, { merge: true });
-          await sendEmailVerification(cred.user);
-          showToast('Account created! Check your email to verify.', 'success');
+          const res = await authApi.signUp(email, password, name, state.savedRecipes);
+          state.user = res.user;
+          showToast('Account created! Please check your email to verify.', 'success');
         }
+        updateUserDisplay();
         closeAuthModal();
       } catch (err) {
-        const codes = {
-          'auth/invalid-login-credentials': 'Incorrect email or password.',
-          'auth/invalid-credential': 'Incorrect email or password.',
-          'auth/wrong-password': 'Incorrect email or password.',
-          'auth/user-not-found': 'Incorrect email or password.',
-          'auth/email-already-in-use': 'Email already registered. Please sign in instead.',
-          'auth/weak-password': 'Password must be at least 6 characters.',
-          'auth/invalid-email': 'Please enter a valid email address.',
-          'auth/network-request-failed': 'Network error. Check your connection.',
-          'auth/too-many-requests': 'Too many attempts. Try again later.'
-        };
-        authErrorMessage.textContent = codes[err.code] || err.message.replace('Firebase:', '').trim();
+        authErrorMessage.textContent = err.message || 'Authentication failed.';
         authErrorMessage.classList.remove('hidden');
+      } finally {
+        if (authSubmitBtn) {
+          authSubmitBtn.disabled = false;
+          authSubmitBtn.textContent = originalText;
+        }
       }
     });
 
     // Profile: Logout
     if (profileLogoutBtn) {
-      profileLogoutBtn.addEventListener('click', async () => {
-        await signOut(auth);
+      profileLogoutBtn.addEventListener('click', () => {
+        authApi.clearSession();
+        state.user = null;
+        state.savedRecipes = [];
+        localStorage.removeItem('bitesize_saved_recipes');
+        updateSavedCountBadge();
+        updateUserDisplay();
+        if (state.activeTab === 'saved') renderSavedRecipesGrid();
+        else renderCurrentRecipesGrid();
         closeProfileModal();
         showToast('Logged out.', 'info');
       });
@@ -467,29 +612,16 @@ document.addEventListener('DOMContentLoaded', () => {
     // Profile: Resend email verification
     if (profileResendVerificationBtn) {
       profileResendVerificationBtn.addEventListener('click', async () => {
-        if (auth.currentUser) {
-          try {
-            await sendEmailVerification(auth.currentUser);
-            showToast('Verification email resent!', 'success');
-          } catch (e) { showToast(e.message.replace('Firebase:', '').trim(), 'error'); }
+        try {
+          await authApi.sendVerification();
+          showToast('Verification email resent!', 'success');
+        } catch (e) {
+          showToast(e.message, 'error');
         }
       });
     }
 
     // Profile: Save changes (name + password)
-    async function reauthenticateUser() {
-      const user = auth.currentUser;
-      if (!user) throw new Error('No user.');
-      const isGoogle = user.providerData.some(p => p.providerId === 'google.com');
-      if (isGoogle) {
-        await reauthenticateWithPopup(user, new GoogleAuthProvider());
-      } else {
-        const pwd = profileCurrentPasswordInput ? profileCurrentPasswordInput.value : '';
-        if (!pwd) throw { message: 'auth/missing-current-password' };
-        await reauthenticateWithCredential(user, EmailAuthProvider.credential(user.email, pwd));
-      }
-    }
-
     if (profileForm) {
       profileForm.addEventListener('submit', async (e) => {
         e.preventDefault();
@@ -497,32 +629,41 @@ document.addEventListener('DOMContentLoaded', () => {
         profileSuccessMessage.classList.add('hidden');
         const newName = profileNameInput.value.trim();
         const newPassword = profilePasswordInput.value;
-        const isGoogle = auth.currentUser.providerData.some(p => p.providerId === 'google.com');
+        const currentPassword = profileCurrentPasswordInput ? profileCurrentPasswordInput.value : '';
+
+        if (!currentPassword) {
+          profileErrorMessage.textContent = 'Please enter your current password to save changes.';
+          profileErrorMessage.classList.remove('hidden');
+          return;
+        }
+
+        const submitBtn = profileForm.querySelector('button[type="submit"]');
+        if (submitBtn) {
+          submitBtn.disabled = true;
+          submitBtn.textContent = 'Saving...';
+        }
+
         try {
-          if (newName !== state.user.name || newPassword) {
-            if (!isGoogle) await reauthenticateUser();
-          }
-          if (newName !== state.user.name) {
-            await setDoc(doc(db, 'users', state.user.uid), { name: newName }, { merge: true });
-            state.user.name = newName;
-            updateUserDisplay();
-          }
-          if (newPassword) await updatePassword(auth.currentUser, newPassword);
+          const res = await authApi.updateProfile({
+            name: newName,
+            currentPassword,
+            newPassword: newPassword || undefined
+          });
+          state.user = res.user;
+          updateUserDisplay();
           profileSuccessMessage.textContent = 'Profile updated successfully!';
           profileSuccessMessage.classList.remove('hidden');
           profilePasswordInput.value = '';
           if (profileCurrentPasswordInput) profileCurrentPasswordInput.value = '';
           setTimeout(() => closeProfileModal(), 1500);
         } catch (err) {
-          const msg = err.message === 'auth/missing-current-password'
-            ? 'Please enter your current password.'
-            : err.code === 'auth/invalid-credential' || err.code === 'auth/wrong-password'
-            ? 'Incorrect current password.'
-            : err.code === 'auth/requires-recent-login'
-            ? 'Please log out and log back in.'
-            : (err.message || '').replace('Firebase:', '').trim();
-          profileErrorMessage.textContent = msg;
+          profileErrorMessage.textContent = err.message || 'Failed to update profile.';
           profileErrorMessage.classList.remove('hidden');
+        } finally {
+          if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Save Changes';
+          }
         }
       });
     }
@@ -545,46 +686,40 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     if (profileDeleteBtn) {
       profileDeleteBtn.addEventListener('click', () => {
-        const isGoogle = auth.currentUser?.providerData.some(p => p.providerId === 'google.com');
-        if (deletePasswordWrapper) deletePasswordWrapper.classList.toggle('hidden', !!isGoogle);
+        if (deletePasswordWrapper) deletePasswordWrapper.classList.remove('hidden');
         hideDeleteError();
         deleteConfirmPanel.classList.remove('hidden');
-        if (!isGoogle && deleteConfirmPassword) deleteConfirmPassword.focus();
+        if (deleteConfirmPassword) deleteConfirmPassword.focus();
       });
     }
     if (deleteCancelBtn) deleteCancelBtn.addEventListener('click', closeDeletePanel);
     if (deleteConfirmBtn) {
       deleteConfirmBtn.addEventListener('click', async () => {
         hideDeleteError();
-        const user = auth.currentUser;
-        if (!user) return;
-        const isGoogle = user.providerData.some(p => p.providerId === 'google.com');
-        if (!isGoogle) {
-          const pwd = deleteConfirmPassword ? deleteConfirmPassword.value.trim() : '';
-          if (!pwd) { showDeleteError('Please enter your password.'); deleteConfirmPassword?.focus(); return; }
+        const pwd = deleteConfirmPassword ? deleteConfirmPassword.value.trim() : '';
+        if (!pwd) {
+          showDeleteError('Please enter your password.');
+          deleteConfirmPassword?.focus();
+          return;
         }
         deleteConfirmBtn.disabled = true;
         deleteConfirmBtn.textContent = 'Deleting…';
         try {
-          if (isGoogle) {
-            await reauthenticateWithPopup(user, new GoogleAuthProvider());
-          } else {
-            await reauthenticateWithCredential(user, EmailAuthProvider.credential(user.email, deleteConfirmPassword.value.trim()));
-          }
-          await deleteDoc(doc(db, 'users', user.uid));
-          await deleteUser(user);
+          await authApi.deleteAccount(pwd);
+          state.user = null;
+          state.savedRecipes = [];
+          localStorage.removeItem('bitesize_saved_recipes');
+          updateSavedCountBadge();
+          updateUserDisplay();
+          if (state.activeTab === 'saved') renderSavedRecipesGrid();
+          else renderCurrentRecipesGrid();
           closeDeletePanel();
           closeProfileModal();
-          showToast('Account deleted.', 'info');
+          showToast('Account permanently deleted.', 'info');
         } catch (e) {
           deleteConfirmBtn.disabled = false;
           deleteConfirmBtn.textContent = 'Yes, Delete My Account';
-          const msg = e.code === 'auth/invalid-credential' || e.code === 'auth/wrong-password'
-            ? 'Incorrect password. Try again.'
-            : e.code === 'auth/requires-recent-login' ? 'Session expired. Log out and back in.'
-            : e.code === 'auth/popup-closed-by-user' ? 'Google sign-in was cancelled.'
-            : (e.message || '').replace('Firebase:', '').trim();
-          showDeleteError(msg);
+          showDeleteError(e.message || 'Failed to delete account.');
         }
       });
     }
@@ -932,9 +1067,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     localStorage.setItem('bitesize_saved_recipes', JSON.stringify(state.savedRecipes));
-    // Sync to Firestore if logged in
-    if (state.user && state.user.uid) {
-      setDoc(doc(db, 'users', state.user.uid), { savedRecipes: state.savedRecipes }, { merge: true })
+    // Sync to backend if logged in
+    if (state.user && state.user.uid && authApi.getToken()) {
+      authApi.saveRecipes(state.savedRecipes)
         .catch(e => console.error('Error syncing saved recipes:', e));
     }
     updateSavedCountBadge();
@@ -1010,8 +1145,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const itemEl = document.createElement('div');
         itemEl.className = `p-2.5 rounded-xl border flex items-center justify-between text-xs font-medium ${isOwned
-            ? 'bg-emerald-50/80 border-emerald-200 text-emerald-950'
-            : 'bg-orange-50/80 border-orange-200 text-orange-950'
+          ? 'bg-emerald-50/80 border-emerald-200 text-emerald-950'
+          : 'bg-orange-50/80 border-orange-200 text-orange-950'
           }`;
 
         itemEl.innerHTML = `
@@ -1032,12 +1167,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Populate Numbered Step-by-Step Instructions
     modalInstructionsList.innerHTML = '';
-    const steps = recipe.instructions || [
-      'Prepare all ingredients by washing and chopping vegetables.',
-      'Heat oil in a large skillet over medium-high heat.',
-      'Add main ingredients and cook until golden brown and cooked through.',
-      'Season with salt, pepper, and herbs before serving hot.'
-    ];
+    let steps = [];
+    if (Array.isArray(recipe.instructions)) {
+      steps = recipe.instructions;
+    } else if (typeof recipe.instructions === 'string' && recipe.instructions.trim()) {
+      steps = recipe.instructions.split(/\r?\n|\.\s+/).map(s => s.trim()).filter(s => s.length > 5);
+    }
+    if (!steps || steps.length === 0) {
+      steps = [
+        'Prepare all ingredients by washing and chopping vegetables.',
+        'Heat oil in a large skillet over medium-high heat.',
+        'Add main ingredients and cook until golden brown and cooked through.',
+        'Season with salt, pepper, and herbs before serving hot.'
+      ];
+    }
 
     steps.forEach((step, idx) => {
       const li = document.createElement('li');
@@ -1096,24 +1239,25 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function closeAuthModal() {
     authModalBackdrop.classList.remove('open');
+    if (authForm) authForm.reset();
   }
 
   function openProfileModal() {
-    if (!auth.currentUser) return;
-    if (profileNameInput) profileNameInput.value = state.user.name || '';
+    if (!state.user) return;
+    const name = state.user.name || state.user.displayName || 'User';
+    if (profileNameInput) profileNameInput.value = name;
     if (profilePasswordInput) profilePasswordInput.value = '';
     if (profileCurrentPasswordInput) profileCurrentPasswordInput.value = '';
-    if (profileModalName) profileModalName.textContent = state.user.name || '';
+    if (profileModalName) profileModalName.textContent = name;
     if (profileModalEmail) profileModalEmail.textContent = state.user.email || '';
-    if (profileAvatarLetter) profileAvatarLetter.textContent = state.user.name ? state.user.name.charAt(0).toUpperCase() : '👤';
+    if (profileAvatarLetter) profileAvatarLetter.textContent = name.charAt(0).toUpperCase();
     if (profileErrorMessage) profileErrorMessage.classList.add('hidden');
     if (profileSuccessMessage) profileSuccessMessage.classList.add('hidden');
     if (profileVerificationBanner) {
-      profileVerificationBanner.classList.toggle('hidden', !!auth.currentUser.emailVerified);
+      profileVerificationBanner.classList.toggle('hidden', !!state.user.emailVerified);
     }
-    const isGoogle = auth.currentUser.providerData.some(p => p.providerId === 'google.com');
     if (profileCurrentPasswordContainer) {
-      profileCurrentPasswordContainer.classList.toggle('hidden', isGoogle);
+      profileCurrentPasswordContainer.classList.remove('hidden');
     }
     // Reset delete panel
     if (deleteConfirmPanel) deleteConfirmPanel.classList.add('hidden');
@@ -1131,9 +1275,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function updateUserDisplay() {
     if (state.user && state.user.uid) {
-      userDisplayName.textContent = state.user.name;
+      const name = state.user.name || state.user.displayName || 'User';
+      userDisplayName.textContent = name;
       if (headerAvatarLetter) {
-        headerAvatarLetter.textContent = state.user.name.charAt(0).toUpperCase();
+        headerAvatarLetter.textContent = name.charAt(0).toUpperCase();
         headerAvatarLetter.className = 'w-6 h-6 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold text-xs';
       }
     } else {
@@ -1225,14 +1370,20 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!state.activeRecipeDetail) return;
     const recipe = state.activeRecipeDetail;
 
-    const instructions = recipe.instructions && recipe.instructions.length > 0
-      ? recipe.instructions
-      : [
+    let instructions = [];
+    if (Array.isArray(recipe.instructions) && recipe.instructions.length > 0) {
+      instructions = recipe.instructions;
+    } else if (typeof recipe.instructions === 'string' && recipe.instructions.trim()) {
+      instructions = recipe.instructions.split(/\r?\n|\.\s+/).map(s => s.trim()).filter(s => s.length > 5);
+    }
+    if (!instructions || instructions.length === 0) {
+      instructions = [
         'Prepare all ingredients by washing, peeling, and chopping as needed.',
         'Heat skillet or cooking pot over medium heat with oil or butter.',
         'Add primary ingredients and cook according to recipe instructions until tender.',
         'Season generously and serve hot.'
       ];
+    }
 
     state.cookMode.active = true;
     state.cookMode.steps = instructions;
@@ -1471,4 +1622,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Run app
   init();
-});
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', startApp);
+} else {
+  startApp();
+}
