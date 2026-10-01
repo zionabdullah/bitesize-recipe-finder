@@ -1273,9 +1273,6 @@ app.post('/api/vision/scan-fridge', apiGeneralLimiter, async (req, res) => {
       const mimeType = mimeTypeMatch ? mimeTypeMatch[1] : 'image/jpeg';
       const base64Data = image.replace(/^data:image\/\w+;base64,/, '');
 
-      // Using gemini-3.6-flash for fast multimodal vision recognition
-      const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${GEMINI_API_KEY}`;
-      
       const payload = {
         contents: [
           {
@@ -1294,32 +1291,41 @@ app.post('/api/vision/scan-fridge', apiGeneralLimiter, async (req, res) => {
         ]
       };
 
-      let attempts = 0;
-      let geminiRes;
-      
-      while (attempts < 2) {
+      // Model fallback chain — each model has its own separate rate limit quota
+      const MODELS = ['gemini-2.0-flash', 'gemini-2.0-flash-lite', 'gemini-3.6-flash'];
+      let geminiRes = null;
+      let usedModel = '';
+
+      for (const model of MODELS) {
+        const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`;
+        console.log(`[Gemini Vision] Trying model: ${model}...`);
+
         geminiRes = await fetch(geminiUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
         });
-        
-        if (geminiRes.ok) break;
-        
-        if (geminiRes.status === 503) {
-          attempts++;
-          console.warn(`[Gemini Vision] 503 Overloaded (Attempt ${attempts}/2). Retrying in 0.8s...`);
-          await new Promise(r => setTimeout(r, 800));
-        } else {
-          break; // Don't retry on 400, 404, etc.
+
+        if (geminiRes.ok) {
+          usedModel = model;
+          break;
         }
+
+        // If rate-limited (429) or overloaded (503), try the next model
+        if (geminiRes.status === 429 || geminiRes.status === 503) {
+          console.warn(`[Gemini Vision] ${model} returned ${geminiRes.status}. Trying next model...`);
+          continue;
+        }
+
+        // For other errors (404, 400, etc.), also try next model
+        console.warn(`[Gemini Vision] ${model} returned ${geminiRes.status}. Trying next model...`);
       }
 
       if (geminiRes && geminiRes.ok) {
         const geminiData = await geminiRes.json();
         const parts = geminiData?.candidates?.[0]?.content?.parts || [];
         const responseText = parts.map(p => p.text || '').filter(Boolean).join('\n');
-        console.log(`[Gemini Vision Output]:`, responseText);
+        console.log(`[Gemini Vision Output (${usedModel})]:`, responseText);
         
         // Extract array using regex matching [...]
         const arrayMatch = responseText.match(/\[[\s\S]*\]/);
@@ -1328,9 +1334,10 @@ app.post('/api/vision/scan-fridge', apiGeneralLimiter, async (req, res) => {
             const parsedIngredients = JSON.parse(arrayMatch[0]);
 
             if (Array.isArray(parsedIngredients)) {
-              console.log(`[Gemini Vision] Successfully detected ${parsedIngredients.length} ingredients:`, parsedIngredients);
+              console.log(`[Gemini Vision] Successfully detected ${parsedIngredients.length} ingredients via ${usedModel}:`, parsedIngredients);
               return res.json({
                 source: 'gemini-vision',
+                model: usedModel,
                 ingredients: parsedIngredients.map(i => String(i).toLowerCase().trim())
               });
             }
@@ -1347,7 +1354,7 @@ app.post('/api/vision/scan-fridge', apiGeneralLimiter, async (req, res) => {
         });
       } else {
         const errText = await geminiRes?.text() || 'No response';
-        console.warn(`[Gemini Vision Warning] Status ${geminiRes?.status}: ${errText}`);
+        console.warn(`[Gemini Vision Warning] All models failed. Last status ${geminiRes?.status}: ${errText}`);
         return res.status(503).json({ error: 'Gemini AI is currently overloaded or unavailable. Please try again later.' });
       }
     } catch (err) {
