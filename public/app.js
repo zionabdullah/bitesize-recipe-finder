@@ -2,14 +2,9 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.4.0/firebas
 import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged, updatePassword, sendPasswordResetEmail, sendEmailVerification, deleteUser, GoogleAuthProvider, signInWithPopup, EmailAuthProvider, reauthenticateWithCredential, reauthenticateWithPopup } from "https://www.gstatic.com/firebasejs/10.4.0/firebase-auth.js";
 import { getFirestore, doc, setDoc, getDoc, deleteDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.4.0/firebase-firestore.js";
 
-const firebaseConfig = {
-  apiKey: "AIzaSyBDObvjFFzMFE8LVFuKAXmgul9t-Cch0Fg",
-  authDomain: "bitesize-recipe-finder.firebaseapp.com",
-  projectId: "bitesize-recipe-finder",
-  storageBucket: "bitesize-recipe-finder.firebasestorage.app",
-  messagingSenderId: "135781162303",
-  appId: "1:135781162303:web:bde3be0b2a1ed59d6e878a"
-};
+// Fetch Firebase config dynamically from server environment variables (.env)
+const configRes = await fetch('/api/firebase-config');
+const firebaseConfig = await configRes.json();
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);

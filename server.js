@@ -391,7 +391,7 @@ async function fetchLiveMealDBRecipes(ingredientStr = '') {
             }
           }
 
-          const used = ingredientsList.filter(ing => 
+          const used = ingredientsList.filter(ing =>
             queryIngredients.some(q => ing.name.includes(q) || q.includes(ing.name))
           );
           const missed = ingredientsList.filter(ing => !used.includes(ing));
@@ -455,6 +455,18 @@ async function fetchLiveMealDBRecipes(ingredientStr = '') {
 // -------------------------------------------------------------------
 // API PROXY ENDPOINTS
 // -------------------------------------------------------------------
+
+// 0. Firebase Config Endpoint (Serves credentials safely from process.env)
+app.get('/api/firebase-config', (req, res) => {
+  res.json({
+    apiKey: process.env.FIREBASE_API_KEY,
+    authDomain: process.env.FIREBASE_AUTH_DOMAIN,
+    projectId: process.env.FIREBASE_PROJECT_ID,
+    storageBucket: process.env.FIREBASE_STORAGE_BUCKET,
+    messagingSenderId: process.env.FIREBASE_MESSAGING_SENDER_ID,
+    appId: process.env.FIREBASE_APP_ID
+  });
+});
 
 // 1. Search Recipes by Ingredients (Spoonacular API + Free Live Recipe API + Mock Fallback)
 app.get('/api/recipes/search', async (req, res) => {
