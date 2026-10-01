@@ -3,18 +3,35 @@ import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, si
 import { getFirestore, doc, setDoc, getDoc, deleteDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.4.0/firebase-firestore.js";
 
 // Fetch Firebase config dynamically from server environment variables (.env)
-const configRes = await fetch('/api/firebase-config');
-const firebaseConfig = await configRes.json();
+let firebaseConfig = {};
+try {
+  const configRes = await fetch('/api/firebase-config');
+  if (configRes.ok) {
+    firebaseConfig = await configRes.json();
+  }
+} catch (err) {
+  console.error('Could not fetch /api/firebase-config:', err);
+}
 
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const db = getFirestore(app);
+let app = null;
+let auth = null;
+let db = null;
+
+try {
+  if (firebaseConfig && firebaseConfig.apiKey) {
+    app = initializeApp(firebaseConfig);
+    auth = getAuth(app);
+    db = getFirestore(app);
+  }
+} catch (err) {
+  console.error('Firebase initialization error:', err);
+}
 
 /* ===================================================================
    BITESIZE - SMART INGREDIENT RECIPE FINDER & MEAL PLANNER (APP.JS)
    =================================================================== */
 
-document.addEventListener('DOMContentLoaded', () => {
+function startApp() {
 
   // -------------------------------------------------------------------
   // 1. APPLICATION STATE
@@ -169,7 +186,8 @@ document.addEventListener('DOMContentLoaded', () => {
     fetchRecipes();
 
     // Firebase auth state listener
-    onAuthStateChanged(auth, async (user) => {
+    if (auth) {
+      onAuthStateChanged(auth, async (user) => {
       if (user) {
         // Logged in — set up real-time Firestore sync for savedRecipes
         if (window.unsubFirestore) window.unsubFirestore();
@@ -211,6 +229,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }
       updateUserDisplay();
     });
+    }
     ingredientInput.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') {
         e.preventDefault();
@@ -1471,4 +1490,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Run app
   init();
-});
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', startApp);
+} else {
+  startApp();
+}
