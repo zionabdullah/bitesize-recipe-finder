@@ -200,7 +200,12 @@ function startApp() {
       timerInterval: null,
       isRunning: false,
       synth: window.speechSynthesis || null
-    }
+    },
+    virtualFridge: JSON.parse(localStorage.getItem('bitesize_virtual_fridge') || '["tomato", "eggs", "milk", "garlic", "chicken"]'),
+    detectedIngredients: [],
+    cameraStream: null,
+    snapMode: 'camera', // 'camera' | 'upload'
+    currentCapturedBase64: null
   };
 
   // -------------------------------------------------------------------
@@ -217,13 +222,39 @@ function startApp() {
 
   // Navigation & Header
   const navDiscoverBtn = document.getElementById('nav-discover-btn');
+  const navSnapBtn = document.getElementById('nav-snap-btn');
+  const sidebarSnapBtn = document.getElementById('sidebar-snap-btn');
   const navSavedBtn = document.getElementById('nav-saved-btn');
   const savedCountBadge = document.getElementById('saved-count-badge');
   const canvasTitle = document.getElementById('canvas-title');
   const canvasSubtitle = document.getElementById('canvas-subtitle');
   const sortSelect = document.getElementById('sort-select');
 
+  // Virtual Fridge & AI Snap Modal Elements
+  const fridgeSnapModal = document.getElementById('fridge-snap-modal');
+  const closeSnapModalBtn = document.getElementById('close-snap-modal-btn');
+  const tabModeCamera = document.getElementById('tab-mode-camera');
+  const tabModeUpload = document.getElementById('tab-mode-upload');
+  const cameraStreamVideo = document.getElementById('camera-stream');
+  const snapPreviewImg = document.getElementById('snap-preview-img');
+  const snapshotCanvas = document.getElementById('snapshot-canvas');
+  const uploadDropzone = document.getElementById('upload-dropzone');
+  const fridgeFileInput = document.getElementById('fridge-file-input');
+  const captureSnapBtn = document.getElementById('capture-snap-btn');
+  const retakeSnapBtn = document.getElementById('retake-snap-btn');
+  const scanningOverlay = document.getElementById('scanning-overlay');
+  const snapResultsContainer = document.getElementById('snap-results-container');
+  const detectedChipsContainer = document.getElementById('detected-chips-container');
+  const detectedCount = document.getElementById('detected-count');
+  const importToFridgeBtn = document.getElementById('import-to-fridge-btn');
+  const virtualFridgeChips = document.getElementById('virtual-fridge-chips');
+  const fridgeItemCount = document.getElementById('fridge-item-count');
+  const fridgeAddInput = document.getElementById('fridge-add-input');
+  const fridgeAddBtn = document.getElementById('fridge-add-btn');
+  const cookFromFridgeBtn = document.getElementById('cook-from-fridge-btn');
+
   // UI States Containers
+
   const stateEmpty = document.getElementById('state-empty');
   const stateLoading = document.getElementById('state-loading');
   const stateNoMatch = document.getElementById('state-no-match');
@@ -329,6 +360,7 @@ function startApp() {
     updateSavedCountBadge();
     renderChips();
     syncPresetTags();
+    renderVirtualFridge();
     // Auto-fetch default initial demo recipe set for rich initial experience
     fetchRecipes();
 
@@ -374,6 +406,30 @@ function startApp() {
         handleAddIngredientFromInput();
       }
     });
+
+    // AI Scanner & Virtual Fridge Listeners
+    if (navSnapBtn) navSnapBtn.addEventListener('click', openFridgeSnapModal);
+    if (sidebarSnapBtn) sidebarSnapBtn.addEventListener('click', openFridgeSnapModal);
+    if (closeSnapModalBtn) closeSnapModalBtn.addEventListener('click', closeFridgeSnapModal);
+    if (tabModeCamera) tabModeCamera.addEventListener('click', () => setSnapMode('camera'));
+    if (tabModeUpload) tabModeUpload.addEventListener('click', () => setSnapMode('upload'));
+    if (captureSnapBtn) captureSnapBtn.addEventListener('click', handleCaptureAndScan);
+    if (retakeSnapBtn) retakeSnapBtn.addEventListener('click', resetSnapModalState);
+    if (importToFridgeBtn) importToFridgeBtn.addEventListener('click', importDetectedToVirtualFridge);
+    if (fridgeFileInput) {
+      fridgeFileInput.addEventListener('click', (e) => { e.target.value = ''; });
+      fridgeFileInput.addEventListener('change', handleFileUpload);
+    }
+    if (fridgeAddBtn) fridgeAddBtn.addEventListener('click', handleAddVirtualFridgeInput);
+    if (fridgeAddInput) {
+      fridgeAddInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          handleAddVirtualFridgeInput();
+        }
+      });
+    }
+    if (cookFromFridgeBtn) cookFromFridgeBtn.addEventListener('click', cookFromFridge);
 
     // Cook Mode Listeners
     if (startCookModeBtn) startCookModeBtn.addEventListener('click', openCookMode);
@@ -1344,23 +1400,375 @@ function startApp() {
     fetchRecipes();
   }
 
-  function showToast(message, type = 'info') {
-    const toast = document.createElement('div');
-    toast.className = 'toast';
+  // -------------------------------------------------------------------
+  // 12. AI VISION FRIDGE SCANNER & VIRTUAL FRIDGE MANAGER
+  // -------------------------------------------------------------------
 
-    let icon = 'ℹ️';
-    if (type === 'success') icon = '✅';
-    if (type === 'error') icon = '❌';
+  // Render Virtual Fridge Chips in Sidebar
+  function renderVirtualFridge() {
+    if (!virtualFridgeChips || !fridgeItemCount) return;
 
-    toast.innerHTML = `<span>${icon}</span><span>${message}</span>`;
-    toastContainer.appendChild(toast);
+    virtualFridgeChips.innerHTML = '';
+    fridgeItemCount.textContent = state.virtualFridge.length;
 
-    setTimeout(() => {
-      toast.style.opacity = '0';
-      toast.style.transform = 'translateY(10px)';
-      toast.style.transition = 'all 300ms ease';
-      setTimeout(() => toast.remove(), 300);
-    }, 3000);
+    if (state.virtualFridge.length === 0) {
+      virtualFridgeChips.innerHTML = `<span class="text-xs text-slate-400 italic">No fridge items stored yet. Tap Scan!</span>`;
+      return;
+    }
+
+    // Emoji mapping for common items
+    const emojiMap = {
+      tomato: '🍅', eggs: '🥚', egg: '🥚', milk: '🥛', garlic: '🧄', onion: '🧅',
+      chicken: '🍗', cheese: '🧀', butter: '🧈', rice: '🍚', pasta: '🍝',
+      spinach: '🥬', beef: '🥩', pork: '🥓', avocado: '🥑', pepper: '🫑',
+      'bell pepper': '🫑', lemon: '🍋', mushroom: '🍄', carrot: '🥕', broccoli: '🥦'
+    };
+
+    state.virtualFridge.forEach(item => {
+      const chip = document.createElement('span');
+      chip.className = 'fridge-chip';
+
+      const lower = item.toLowerCase().trim();
+      const emoji = emojiMap[lower] || '🥦';
+
+      chip.innerHTML = `
+        <span>${emoji}</span>
+        <span class="capitalize">${item}</span>
+        <button class="chip-remove-btn" title="Remove item">✕</button>
+      `;
+
+      chip.querySelector('.chip-remove-btn').addEventListener('click', (e) => {
+        e.stopPropagation();
+        removeVirtualFridgeItem(item);
+      });
+
+      virtualFridgeChips.appendChild(chip);
+    });
+
+    // Save to LocalStorage
+    localStorage.setItem('bitesize_virtual_fridge', JSON.stringify(state.virtualFridge));
+  }
+
+  function addVirtualFridgeItem(itemStr) {
+    if (!itemStr) return;
+    const cleanItem = itemStr.trim().toLowerCase();
+    if (cleanItem && !state.virtualFridge.includes(cleanItem)) {
+      state.virtualFridge.push(cleanItem);
+      renderVirtualFridge();
+    }
+  }
+
+  function removeVirtualFridgeItem(itemStr) {
+    state.virtualFridge = state.virtualFridge.filter(i => i.toLowerCase() !== itemStr.toLowerCase());
+    renderVirtualFridge();
+    showToast(`Removed "${itemStr}" from Virtual Fridge`, 'info');
+  }
+
+  function handleAddVirtualFridgeInput() {
+    if (!fridgeAddInput) return;
+    const val = fridgeAddInput.value.trim();
+    if (val) {
+      addVirtualFridgeItem(val);
+      fridgeAddInput.value = '';
+      showToast(`Added "${val}" to Virtual Fridge!`, 'success');
+    }
+  }
+
+  // 1-Click Cook From Fridge Action
+  function cookFromFridge() {
+    if (state.virtualFridge.length === 0) {
+      showToast('Your Virtual Fridge is empty! Scan a photo or add items first.', 'error');
+      openFridgeSnapModal();
+      return;
+    }
+
+    state.activeIngredients = [...new Set([...state.virtualFridge])];
+    renderChips();
+    syncPresetTags();
+    
+    // Switch tab to Discover if on Saved
+    if (state.activeTab !== 'discover') {
+      switchTab('discover');
+    }
+
+    fetchRecipes();
+    showToast(`Searching recipes matching ${state.virtualFridge.length} items in your fridge! 🍳`, 'success');
+  }
+
+  // Modal Control & Camera Handlers
+  function openFridgeSnapModal() {
+    if (!fridgeSnapModal) return;
+    fridgeSnapModal.classList.add('open');
+    resetSnapModalState();
+    setSnapMode('camera');
+  }
+
+  function closeFridgeSnapModal() {
+    if (!fridgeSnapModal) return;
+    fridgeSnapModal.classList.remove('open');
+    stopCamera();
+  }
+
+  function setSnapMode(mode) {
+    state.snapMode = mode;
+
+    if (mode === 'camera') {
+      tabModeCamera.classList.add('bg-white', 'text-emerald-700', 'shadow-xs', 'font-bold');
+      tabModeCamera.classList.remove('text-slate-600', 'font-medium');
+
+      tabModeUpload.classList.remove('bg-white', 'text-emerald-700', 'shadow-xs', 'font-bold');
+      tabModeUpload.classList.add('text-slate-600', 'font-medium');
+
+      uploadDropzone.classList.add('hidden');
+      
+      if (state.currentCapturedBase64) {
+        cameraStreamVideo.classList.add('hidden');
+        snapPreviewImg.classList.remove('hidden');
+        captureSnapBtn.innerHTML = `<span>⚡</span> Scan Selected Photo`;
+      } else {
+        snapPreviewImg.classList.add('hidden');
+        cameraStreamVideo.classList.remove('hidden');
+        captureSnapBtn.innerHTML = `<span>📸</span> Capture & Scan Photo`;
+        startCamera();
+      }
+    } else {
+      tabModeUpload.classList.add('bg-white', 'text-emerald-700', 'shadow-xs', 'font-bold');
+      tabModeUpload.classList.remove('text-slate-600', 'font-medium');
+
+      tabModeCamera.classList.remove('bg-white', 'text-emerald-700', 'shadow-xs', 'font-bold');
+      tabModeCamera.classList.add('text-slate-600', 'font-medium');
+
+      stopCamera();
+      cameraStreamVideo.classList.add('hidden');
+
+      if (state.currentCapturedBase64) {
+        snapPreviewImg.classList.remove('hidden');
+        uploadDropzone.classList.add('hidden');
+        captureSnapBtn.innerHTML = `<span>⚡</span> Scan Selected Photo`;
+      } else {
+        snapPreviewImg.classList.add('hidden');
+        uploadDropzone.classList.remove('hidden');
+        captureSnapBtn.innerHTML = `<span>📁</span> Upload`;
+      }
+    }
+  }
+
+  async function startCamera() {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      showToast('Live camera requires HTTPS on mobile. Switched to Photo Upload / Camera Take.', 'info');
+      setSnapMode('upload');
+      return;
+    }
+
+    try {
+      stopCamera();
+
+      // Constraint Attempt 1: Rear camera preferred on mobile
+      let stream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } }
+        });
+      } catch (e1) {
+        // Constraint Attempt 2: Generic video fallback
+        console.warn('Environment camera constraint failed, trying standard camera:', e1);
+        stream = await navigator.mediaDevices.getUserMedia({ video: true });
+      }
+
+      state.cameraStream = stream;
+      cameraStreamVideo.srcObject = stream;
+      cameraStreamVideo.muted = true;
+
+      try {
+        await cameraStreamVideo.play();
+      } catch (playErr) {
+        console.warn('Video play call error:', playErr);
+      }
+
+      // Check if video actually renders within 1.5s (e.g. mobile HTTP permission block)
+      setTimeout(() => {
+        if (state.snapMode === 'camera' && !state.currentCapturedBase64 && (!cameraStreamVideo.videoWidth || cameraStreamVideo.paused)) {
+          console.warn('Camera stream active but video width is 0. Switching to Upload fallback.');
+          showToast('Switched to Photo / Camera Upload mode.', 'info');
+          setSnapMode('upload');
+        }
+      }, 1500);
+
+    } catch (err) {
+      console.warn('Camera access error:', err);
+      showToast('Camera stream unavailable. Switched to Photo / Camera Upload.', 'info');
+      setSnapMode('upload');
+    }
+  }
+
+  function stopCamera() {
+    if (state.cameraStream) {
+      state.cameraStream.getTracks().forEach(track => track.stop());
+      state.cameraStream = null;
+    }
+  }
+
+  function resetSnapModalState() {
+    state.currentCapturedBase64 = null;
+    if (fridgeFileInput) fridgeFileInput.value = '';
+    snapPreviewImg.src = '';
+    snapPreviewImg.classList.add('hidden');
+    snapResultsContainer.classList.add('hidden');
+    scanningOverlay.classList.add('hidden');
+    retakeSnapBtn.classList.add('hidden');
+    captureSnapBtn.classList.remove('hidden');
+    captureSnapBtn.disabled = false;
+    
+    if (state.snapMode === 'camera') {
+      captureSnapBtn.innerHTML = `<span>📸</span> Capture & Scan Photo`;
+      cameraStreamVideo.classList.remove('hidden');
+      uploadDropzone.classList.add('hidden');
+      startCamera();
+    } else {
+      captureSnapBtn.innerHTML = `<span>📁</span> Upload`;
+      cameraStreamVideo.classList.add('hidden');
+      uploadDropzone.classList.remove('hidden');
+    }
+  }
+
+  function handleFileUpload(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      showToast('Please select a valid image file (JPG, PNG, WEBP).', 'error');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      // Compress image to max 800px wide at 0.65 quality before storing
+      // This keeps payloads small enough to process within Vercel's 10s timeout
+      const img = new Image();
+      img.onload = () => {
+        const MAX_DIM = 800;
+        let w = img.width;
+        let h = img.height;
+        if (w > MAX_DIM || h > MAX_DIM) {
+          if (w > h) { h = Math.round(h * MAX_DIM / w); w = MAX_DIM; }
+          else { w = Math.round(w * MAX_DIM / h); h = MAX_DIM; }
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = w;
+        canvas.height = h;
+        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+        const compressed = canvas.toDataURL('image/jpeg', 0.65);
+        state.currentCapturedBase64 = compressed;
+        snapPreviewImg.src = compressed;
+        snapPreviewImg.classList.remove('hidden');
+        cameraStreamVideo.classList.add('hidden');
+        uploadDropzone.classList.add('hidden');
+        retakeSnapBtn.classList.remove('hidden');
+        captureSnapBtn.innerHTML = `<span>⚡</span> Scan Selected Photo`;
+        captureSnapBtn.classList.remove('hidden');
+        captureSnapBtn.disabled = false;
+      };
+      img.src = event.target.result;
+    };
+    reader.readAsDataURL(file);
+  }
+
+  async function handleCaptureAndScan() {
+    let base64Image = state.currentCapturedBase64 || '';
+
+    if (!base64Image && state.snapMode === 'camera') {
+      // If camera stream is not active or video is paused/0px, open file/camera picker fallback!
+      if (!cameraStreamVideo.videoWidth || cameraStreamVideo.paused) {
+        showToast('Opening camera/file picker...', 'info');
+        if (fridgeFileInput) fridgeFileInput.click();
+        return;
+      }
+
+      snapshotCanvas.width = cameraStreamVideo.videoWidth || 640;
+      snapshotCanvas.height = cameraStreamVideo.videoHeight || 480;
+      const ctx = snapshotCanvas.getContext('2d');
+      ctx.drawImage(cameraStreamVideo, 0, 0, snapshotCanvas.width, snapshotCanvas.height);
+
+      base64Image = snapshotCanvas.toDataURL('image/jpeg', 0.65);
+      state.currentCapturedBase64 = base64Image;
+      stopCamera();
+
+      snapPreviewImg.src = base64Image;
+      cameraStreamVideo.classList.add('hidden');
+      snapPreviewImg.classList.remove('hidden');
+    } else if (!base64Image) {
+      if (fridgeFileInput) {
+        fridgeFileInput.value = '';
+        fridgeFileInput.click();
+      }
+      return;
+    }
+
+    // Show Scanning State UI
+    scanningOverlay.classList.remove('hidden');
+    captureSnapBtn.disabled = true;
+    captureSnapBtn.innerHTML = `<span>⏳</span> AI Scanning Image...`;
+    retakeSnapBtn.classList.remove('hidden');
+
+    try {
+      const res = await fetch('/api/vision/scan-fridge', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image: base64Image })
+      });
+
+      const data = await res.json();
+      scanningOverlay.classList.add('hidden');
+
+      if (data.error) {
+        throw new Error(data.error);
+      } else if (data.ingredients && Array.isArray(data.ingredients)) {
+        state.detectedIngredients = data.ingredients;
+        renderDetectedChips();
+        snapResultsContainer.classList.remove('hidden');
+        captureSnapBtn.classList.add('hidden');
+        showToast(`AI Detected ${data.ingredients.length} items in your fridge! ✨`, 'success');
+      } else {
+        throw new Error('Could not analyze photo. Please try another clear picture.');
+      }
+    } catch (err) {
+      console.error('Vision scan error:', err);
+      scanningOverlay.classList.add('hidden');
+      captureSnapBtn.disabled = false;
+      captureSnapBtn.innerHTML = `<span>📸</span> Try Scanning Again`;
+      showToast(err.message || 'Could not analyze photo. Please try another clear picture.', 'error');
+    }
+  }
+
+  function renderDetectedChips() {
+    if (!detectedChipsContainer || !detectedCount) return;
+
+    detectedChipsContainer.innerHTML = '';
+    detectedCount.textContent = state.detectedIngredients.length;
+
+    state.detectedIngredients.forEach(item => {
+      const chip = document.createElement('span');
+      chip.className = 'px-3 py-1 bg-emerald-100 text-emerald-900 text-xs font-semibold rounded-full flex items-center gap-1 shadow-2xs';
+      chip.innerHTML = `<span>✨</span> <span class="capitalize">${item}</span>`;
+      detectedChipsContainer.appendChild(chip);
+    });
+  }
+
+  function importDetectedToVirtualFridge() {
+    if (state.detectedIngredients.length === 0) return;
+
+    let addedCount = 0;
+    state.detectedIngredients.forEach(item => {
+      const clean = item.trim().toLowerCase();
+      if (!state.virtualFridge.includes(clean)) {
+        state.virtualFridge.push(clean);
+        addedCount++;
+      }
+    });
+
+    renderVirtualFridge();
+    closeFridgeSnapModal();
+    showToast(`Imported ${addedCount} new ingredients into your Virtual Fridge! 🧊`, 'success');
   }
 
   // -------------------------------------------------------------------
@@ -1618,6 +2026,31 @@ function startApp() {
     } catch (e) {
       console.warn('Audio Context chime error:', e);
     }
+  }
+
+  // -------------------------------------------------------------------
+  // 15. UTILITIES
+  // -------------------------------------------------------------------
+
+  function showToast(message, type = 'info') {
+    if (!toastContainer) return;
+    
+    const toast = document.createElement('div');
+    toast.className = 'toast';
+
+    let icon = 'ℹ️';
+    if (type === 'success') icon = '✅';
+    if (type === 'error') icon = '❌';
+
+    toast.innerHTML = `<span>${icon}</span><span>${message}</span>`;
+    toastContainer.appendChild(toast);
+
+    setTimeout(() => {
+      toast.style.opacity = '0';
+      toast.style.transform = 'translateY(10px)';
+      toast.style.transition = 'all 300ms ease';
+      setTimeout(() => toast.remove(), 300);
+    }, 3000);
   }
 
   // Run app
