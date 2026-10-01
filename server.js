@@ -1297,7 +1297,7 @@ app.post('/api/vision/scan-fridge', apiGeneralLimiter, async (req, res) => {
       let attempts = 0;
       let geminiRes;
       
-      while (attempts < 3) {
+      while (attempts < 2) {
         geminiRes = await fetch(geminiUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -1308,8 +1308,8 @@ app.post('/api/vision/scan-fridge', apiGeneralLimiter, async (req, res) => {
         
         if (geminiRes.status === 503) {
           attempts++;
-          console.warn(`[Gemini Vision] 503 Overloaded (Attempt ${attempts}/3). Retrying in 1.5s...`);
-          await new Promise(r => setTimeout(r, 1500));
+          console.warn(`[Gemini Vision] 503 Overloaded (Attempt ${attempts}/2). Retrying in 0.8s...`);
+          await new Promise(r => setTimeout(r, 800));
         } else {
           break; // Don't retry on 400, 404, etc.
         }

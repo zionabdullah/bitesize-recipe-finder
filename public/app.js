@@ -1642,15 +1642,33 @@ function startApp() {
 
     const reader = new FileReader();
     reader.onload = (event) => {
-      state.currentCapturedBase64 = event.target.result;
-      snapPreviewImg.src = state.currentCapturedBase64;
-      snapPreviewImg.classList.remove('hidden');
-      cameraStreamVideo.classList.add('hidden');
-      uploadDropzone.classList.add('hidden');
-      retakeSnapBtn.classList.remove('hidden');
-      captureSnapBtn.innerHTML = `<span>⚡</span> Scan Selected Photo`;
-      captureSnapBtn.classList.remove('hidden');
-      captureSnapBtn.disabled = false;
+      // Compress image to max 800px wide at 0.65 quality before storing
+      // This keeps payloads small enough to process within Vercel's 10s timeout
+      const img = new Image();
+      img.onload = () => {
+        const MAX_DIM = 800;
+        let w = img.width;
+        let h = img.height;
+        if (w > MAX_DIM || h > MAX_DIM) {
+          if (w > h) { h = Math.round(h * MAX_DIM / w); w = MAX_DIM; }
+          else { w = Math.round(w * MAX_DIM / h); h = MAX_DIM; }
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = w;
+        canvas.height = h;
+        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+        const compressed = canvas.toDataURL('image/jpeg', 0.65);
+        state.currentCapturedBase64 = compressed;
+        snapPreviewImg.src = compressed;
+        snapPreviewImg.classList.remove('hidden');
+        cameraStreamVideo.classList.add('hidden');
+        uploadDropzone.classList.add('hidden');
+        retakeSnapBtn.classList.remove('hidden');
+        captureSnapBtn.innerHTML = `<span>⚡</span> Scan Selected Photo`;
+        captureSnapBtn.classList.remove('hidden');
+        captureSnapBtn.disabled = false;
+      };
+      img.src = event.target.result;
     };
     reader.readAsDataURL(file);
   }
@@ -1671,7 +1689,7 @@ function startApp() {
       const ctx = snapshotCanvas.getContext('2d');
       ctx.drawImage(cameraStreamVideo, 0, 0, snapshotCanvas.width, snapshotCanvas.height);
 
-      base64Image = snapshotCanvas.toDataURL('image/jpeg', 0.85);
+      base64Image = snapshotCanvas.toDataURL('image/jpeg', 0.65);
       state.currentCapturedBase64 = base64Image;
       stopCamera();
 
