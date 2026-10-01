@@ -8,6 +8,8 @@ const PORT = process.env.PORT || 3000;
 const SPOONACULAR_API_KEY = process.env.SPOONACULAR_API_KEY || '';
 const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY || '';
 const ELEVENLABS_VOICE_ID = process.env.ELEVENLABS_VOICE_ID || '21m00Tcm4TlvDq8ikWAM'; // Rachel (Warm Natural Female Voice)
+const FIREBASE_API_KEY = process.env.FIREBASE_API_KEY || '';
+const FIREBASE_PROJECT_ID = process.env.FIREBASE_PROJECT_ID || '';
 
 app.use(cors());
 app.use(express.json());
@@ -453,19 +455,491 @@ async function fetchLiveMealDBRecipes(ingredientStr = '') {
 }
 
 // -------------------------------------------------------------------
-// API PROXY ENDPOINTS
+// SECURE BACKEND-FOR-FRONTEND (BFF) AUTH & FIRESTORE SERVICE
+// All Firebase credentials and SDK communications remain strictly server-side.
 // -------------------------------------------------------------------
 
-// 0. Firebase Config Endpoint (Serves credentials safely from process.env)
-app.get('/api/firebase-config', (req, res) => {
+function toFirestoreFields(obj) {
+  const fields = {};
+  for (const [k, v] of Object.entries(obj)) {
+    fields[k] = toFirestoreValue(v);
+  }
+  return fields;
+}
+
+function toFirestoreValue(val) {
+  if (val === null || val === undefined) return { nullValue: null };
+  if (typeof val === 'boolean') return { booleanValue: val };
+  if (typeof val === 'number') {
+    return Number.isInteger(val) ? { integerValue: val.toString() } : { doubleValue: val };
+  }
+  if (typeof val === 'string') return { stringValue: val };
+  if (Array.isArray(val)) {
+    return { arrayValue: { values: val.map(toFirestoreValue) } };
+  }
+  if (typeof val === 'object') {
+    return { mapValue: { fields: toFirestoreFields(val) } };
+  }
+  return { stringValue: String(val) };
+}
+
+function fromFirestoreFields(fields) {
+  if (!fields) return {};
+  const res = {};
+  for (const [k, v] of Object.entries(fields)) {
+    res[k] = fromFirestoreValue(v);
+  }
+  return res;
+}
+
+function fromFirestoreValue(val) {
+  if (!val) return null;
+  if ('stringValue' in val) return val.stringValue;
+  if ('integerValue' in val) return parseInt(val.integerValue, 10);
+  if ('doubleValue' in val) return parseFloat(val.doubleValue);
+  if ('booleanValue' in val) return val.booleanValue;
+  if ('nullValue' in val) return null;
+  if ('arrayValue' in val) return (val.arrayValue.values || []).map(fromFirestoreValue);
+  if ('mapValue' in val) return fromFirestoreFields(val.mapValue.fields);
+  return null;
+}
+
+async function verifyIdToken(req) {
+  const authHeader = req.headers.authorization || '';
+  const token = authHeader.startsWith('Bearer ') ? authHeader.substring(7) : (req.body?.token || req.query?.token);
+  if (!token) return null;
+
+  try {
+    const res = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${FIREBASE_API_KEY}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ idToken: token })
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (data.users && data.users.length > 0) {
+      const u = data.users[0];
+      return {
+        uid: u.localId,
+        email: u.email,
+        name: u.displayName || u.email.split('@')[0],
+        emailVerified: !!u.emailVerified,
+        token
+      };
+    }
+  } catch (err) {
+    console.error('[Auth Verify Error]', err.message);
+  }
+  return null;
+}
+
+async function getFirestoreUser(uid) {
+  try {
+    const url = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents/users/${uid}?key=${FIREBASE_API_KEY}`;
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    const data = await res.json();
+    return fromFirestoreFields(data.fields);
+  } catch (err) {
+    console.error('[Firestore Read Error]', err.message);
+    return null;
+  }
+}
+
+async function setFirestoreUser(uid, data, merge = true) {
+  try {
+    const keys = Object.keys(data);
+    let url = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents/users/${uid}?key=${FIREBASE_API_KEY}`;
+    if (merge && keys.length > 0) {
+      const maskParams = keys.map(k => `updateMask.fieldPaths=${encodeURIComponent(k)}`).join('&');
+      url += `&${maskParams}`;
+    }
+    const res = await fetch(url, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fields: toFirestoreFields(data) })
+    });
+    return res.ok;
+  } catch (err) {
+    console.error('[Firestore Write Error]', err.message);
+    return false;
+  }
+}
+
+async function deleteFirestoreUser(uid) {
+  try {
+    const url = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents/users/${uid}?key=${FIREBASE_API_KEY}`;
+    const res = await fetch(url, { method: 'DELETE' });
+    return res.ok;
+  } catch (err) {
+    console.error('[Firestore Delete Error]', err.message);
+    return false;
+  }
+}
+
+// -------------------------------------------------------------------
+// AUTHENTICATION API ROUTES (BFF)
+// -------------------------------------------------------------------
+
+// 1. Sign Up
+app.post('/api/auth/signup', async (req, res) => {
+  const { email, password, name, savedRecipes } = req.body;
+  if (!email || !password) {
+    return res.status(400).json({ error: 'Email and password are required.' });
+  }
+
+  try {
+    const signUpRes = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=${FIREBASE_API_KEY}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password, returnSecureToken: true })
+    });
+
+    const data = await signUpRes.json();
+    if (!signUpRes.ok) {
+      const errCode = data.error?.message || 'SIGNUP_FAILED';
+      if (errCode.includes('EMAIL_EXISTS')) {
+        return res.status(400).json({ error: 'Email already registered. Please sign in instead.' });
+      }
+      if (errCode.includes('WEAK_PASSWORD')) {
+        return res.status(400).json({ error: 'Password must be at least 6 characters.' });
+      }
+      if (errCode.includes('INVALID_EMAIL')) {
+        return res.status(400).json({ error: 'Please enter a valid email address.' });
+      }
+      return res.status(400).json({ error: data.error?.message || 'Failed to create account.' });
+    }
+
+    const { idToken, localId: uid, refreshToken } = data;
+    const displayName = (name && name.trim()) ? name.trim() : email.split('@')[0];
+
+    // Update display name
+    await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:update?key=${FIREBASE_API_KEY}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ idToken, displayName, returnSecureToken: true })
+    });
+
+    // Send verification email
+    try {
+      await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:sendOobCode?key=${FIREBASE_API_KEY}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ requestType: 'VERIFY_EMAIL', idToken })
+      });
+    } catch (e) {
+      console.warn('[Send Verification Warning]', e.message);
+    }
+
+    // Save profile and initial bookmarks to Firestore
+    await setFirestoreUser(uid, {
+      name: displayName,
+      savedRecipes: Array.isArray(savedRecipes) ? savedRecipes : []
+    }, false);
+
+    res.json({
+      success: true,
+      user: {
+        uid,
+        email,
+        name: displayName,
+        emailVerified: false
+      },
+      token: idToken,
+      refreshToken
+    });
+  } catch (err) {
+    console.error('[Sign Up Error]', err);
+    res.status(500).json({ error: 'Internal server error during account creation.' });
+  }
+});
+
+// 2. Sign In
+app.post('/api/auth/signin', async (req, res) => {
+  const { email, password } = req.body;
+  if (!email || !password) {
+    return res.status(400).json({ error: 'Email and password are required.' });
+  }
+
+  try {
+    const signInRes = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${FIREBASE_API_KEY}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password, returnSecureToken: true })
+    });
+
+    const data = await signInRes.json();
+    if (!signInRes.ok) {
+      const errCode = data.error?.message || 'SIGNIN_FAILED';
+      if (errCode.includes('INVALID_LOGIN_CREDENTIALS') || errCode.includes('INVALID_PASSWORD') || errCode.includes('EMAIL_NOT_FOUND')) {
+        return res.status(400).json({ error: 'Incorrect email or password.' });
+      }
+      if (errCode.includes('USER_DISABLED')) {
+        return res.status(400).json({ error: 'This user account has been disabled.' });
+      }
+      if (errCode.includes('TOO_MANY_ATTEMPTS_TRY_LATER')) {
+        return res.status(400).json({ error: 'Too many attempts. Please try again later.' });
+      }
+      return res.status(400).json({ error: data.error?.message || 'Failed to sign in.' });
+    }
+
+    const { idToken, localId: uid, displayName, refreshToken } = data;
+
+    // Check user info / verification status
+    const lookupRes = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${FIREBASE_API_KEY}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ idToken })
+    });
+    let emailVerified = false;
+    let finalDisplayName = displayName || email.split('@')[0];
+    if (lookupRes.ok) {
+      const lookupData = await lookupRes.json();
+      if (lookupData.users && lookupData.users[0]) {
+        emailVerified = !!lookupData.users[0].emailVerified;
+        if (lookupData.users[0].displayName) finalDisplayName = lookupData.users[0].displayName;
+      }
+    }
+
+    // Retrieve Firestore user doc to ensure latest name & savedRecipes
+    const firestoreData = await getFirestoreUser(uid);
+    if (firestoreData && firestoreData.name) {
+      finalDisplayName = firestoreData.name;
+    }
+
+    res.json({
+      success: true,
+      user: {
+        uid,
+        email,
+        name: finalDisplayName,
+        emailVerified
+      },
+      savedRecipes: firestoreData?.savedRecipes || [],
+      token: idToken,
+      refreshToken
+    });
+  } catch (err) {
+    console.error('[Sign In Error]', err);
+    res.status(500).json({ error: 'Internal server error during sign in.' });
+  }
+});
+
+// 3. Forgot Password
+app.post('/api/auth/forgot-password', async (req, res) => {
+  const { email } = req.body;
+  if (!email) {
+    return res.status(400).json({ error: 'Email address is required.' });
+  }
+
+  try {
+    const resetRes = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:sendOobCode?key=${FIREBASE_API_KEY}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ requestType: 'PASSWORD_RESET', email })
+    });
+
+    const data = await resetRes.json();
+    if (!resetRes.ok) {
+      return res.status(400).json({ error: data.error?.message || 'Failed to send password reset email.' });
+    }
+
+    res.json({ success: true, message: 'Password reset email sent.' });
+  } catch (err) {
+    console.error('[Forgot Password Error]', err);
+    res.status(500).json({ error: 'Internal server error during password reset.' });
+  }
+});
+
+// 4. Resend Verification Email
+app.post('/api/auth/send-verification', async (req, res) => {
+  const authUser = await verifyIdToken(req);
+  if (!authUser) {
+    return res.status(401).json({ error: 'Unauthorized. Please sign in.' });
+  }
+
+  try {
+    const verifyRes = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:sendOobCode?key=${FIREBASE_API_KEY}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ requestType: 'VERIFY_EMAIL', idToken: authUser.token })
+    });
+
+    const data = await verifyRes.json();
+    if (!verifyRes.ok) {
+      return res.status(400).json({ error: data.error?.message || 'Failed to send verification email.' });
+    }
+
+    res.json({ success: true, message: 'Verification email sent.' });
+  } catch (err) {
+    console.error('[Verification Error]', err);
+    res.status(500).json({ error: 'Internal server error sending verification.' });
+  }
+});
+
+// 5. Get Current User Profile & Sync
+app.get('/api/auth/me', async (req, res) => {
+  const authUser = await verifyIdToken(req);
+  if (!authUser) {
+    return res.status(401).json({ error: 'Unauthorized.' });
+  }
+
+  const firestoreData = await getFirestoreUser(authUser.uid);
   res.json({
-    apiKey: process.env.FIREBASE_API_KEY || '',
-    authDomain: process.env.FIREBASE_AUTH_DOMAIN || '',
-    projectId: process.env.FIREBASE_PROJECT_ID || '',
-    storageBucket: process.env.FIREBASE_STORAGE_BUCKET || '',
-    messagingSenderId: process.env.FIREBASE_MESSAGING_SENDER_ID || '',
-    appId: process.env.FIREBASE_APP_ID || ''
+    success: true,
+    user: {
+      uid: authUser.uid,
+      email: authUser.email,
+      name: firestoreData?.name || authUser.name,
+      emailVerified: authUser.emailVerified
+    },
+    savedRecipes: firestoreData?.savedRecipes || []
   });
+});
+
+// 6. Update Profile (Name and/or Password)
+app.post('/api/auth/update-profile', async (req, res) => {
+  const authUser = await verifyIdToken(req);
+  if (!authUser) {
+    return res.status(401).json({ error: 'Unauthorized. Please log in again.' });
+  }
+
+  const { name, currentPassword, newPassword } = req.body;
+
+  let activeToken = authUser.token;
+  if (currentPassword || newPassword) {
+    if (!currentPassword) {
+      return res.status(400).json({ error: 'Please enter your current password.' });
+    }
+
+    const checkRes = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${FIREBASE_API_KEY}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: authUser.email, password: currentPassword, returnSecureToken: true })
+    });
+
+    const checkData = await checkRes.json();
+    if (!checkRes.ok) {
+      return res.status(400).json({ error: 'Incorrect current password.' });
+    }
+    activeToken = checkData.idToken;
+  }
+
+  try {
+    const updateBody = { idToken: activeToken, returnSecureToken: true };
+    if (name && name.trim()) updateBody.displayName = name.trim();
+    if (newPassword) updateBody.password = newPassword;
+
+    const updateRes = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:update?key=${FIREBASE_API_KEY}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updateBody)
+    });
+
+    const updateData = await updateRes.json();
+    if (!updateRes.ok) {
+      return res.status(400).json({ error: updateData.error?.message || 'Failed to update profile.' });
+    }
+
+    const updatedName = (name && name.trim()) ? name.trim() : authUser.name;
+    if (name && name.trim()) {
+      await setFirestoreUser(authUser.uid, { name: updatedName });
+    }
+
+    res.json({
+      success: true,
+      user: {
+        uid: authUser.uid,
+        email: authUser.email,
+        name: updatedName,
+        emailVerified: authUser.emailVerified
+      },
+      token: updateData.idToken || activeToken
+    });
+  } catch (err) {
+    console.error('[Update Profile Error]', err);
+    res.status(500).json({ error: 'Internal server error updating profile.' });
+  }
+});
+
+// 7. Permanently Delete Account
+app.post('/api/auth/delete-account', async (req, res) => {
+  const authUser = await verifyIdToken(req);
+  if (!authUser) {
+    return res.status(401).json({ error: 'Unauthorized.' });
+  }
+
+  const { password } = req.body;
+  if (!password) {
+    return res.status(400).json({ error: 'Please enter your password to confirm account deletion.' });
+  }
+
+  const checkRes = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${FIREBASE_API_KEY}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: authUser.email, password, returnSecureToken: true })
+  });
+
+  const checkData = await checkRes.json();
+  if (!checkRes.ok) {
+    return res.status(400).json({ error: 'Incorrect password. Try again.' });
+  }
+
+  try {
+    await deleteFirestoreUser(authUser.uid);
+
+    const delRes = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:delete?key=${FIREBASE_API_KEY}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ idToken: checkData.idToken })
+    });
+
+    if (!delRes.ok) {
+      const delData = await delRes.json();
+      return res.status(400).json({ error: delData.error?.message || 'Failed to delete account.' });
+    }
+
+    res.json({ success: true, message: 'Account permanently deleted.' });
+  } catch (err) {
+    console.error('[Delete Account Error]', err);
+    res.status(500).json({ error: 'Internal server error deleting account.' });
+  }
+});
+
+// 8. User Saved Recipes (Sync & Get)
+app.get('/api/user/saved-recipes', async (req, res) => {
+  const authUser = await verifyIdToken(req);
+  if (!authUser) {
+    return res.status(401).json({ error: 'Unauthorized.' });
+  }
+
+  const data = await getFirestoreUser(authUser.uid);
+  res.json({
+    success: true,
+    savedRecipes: data?.savedRecipes || []
+  });
+});
+
+app.post('/api/user/saved-recipes', async (req, res) => {
+  const authUser = await verifyIdToken(req);
+  if (!authUser) {
+    return res.status(401).json({ error: 'Unauthorized.' });
+  }
+
+  const { savedRecipes } = req.body;
+  if (!Array.isArray(savedRecipes)) {
+    return res.status(400).json({ error: 'savedRecipes must be an array.' });
+  }
+
+  const ok = await setFirestoreUser(authUser.uid, {
+    savedRecipes
+  });
+
+  if (!ok) {
+    return res.status(500).json({ error: 'Failed to save recipes to database.' });
+  }
+
+  res.json({ success: true, savedRecipes });
 });
 
 // 1. Search Recipes by Ingredients (Spoonacular API + Free Live Recipe API + Mock Fallback)
